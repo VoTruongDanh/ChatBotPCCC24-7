@@ -1,0 +1,16 @@
+{
+  "name": "be-bridge",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/master.mjs",
+    "dev": "node --watch src/master.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "puppeteer": "^22.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "uuid": "^9.0.0"
+  }
+}
