@@ -23,6 +23,13 @@ export const PROFILE_DIR = path.resolve(
   process.env.BRIDGE_PROFILE_DIR ? '' : '.bridge-chrome-profile'
 );
 
+// Streaming Detection Configuration
+export const STREAM_NO_CHANGE_THRESHOLD = Number(process.env.STREAM_NO_CHANGE_THRESHOLD || 10);
+export const STREAM_FALLBACK_THRESHOLD = Number(process.env.STREAM_FALLBACK_THRESHOLD || 25);
+export const STREAM_MAX_TIMEOUT = Number(process.env.STREAM_MAX_TIMEOUT || 120000);
+export const STREAM_START_TIMEOUT = Number(process.env.STREAM_START_TIMEOUT || 10000);
+export const STREAM_CHECK_INTERVAL = Number(process.env.STREAM_CHECK_INTERVAL || 200);
+
 export function getExecutable() {
   if (os.platform() !== 'win32') return null;
   const pf = process.env['ProgramFiles'] || 'C:\\Program Files';

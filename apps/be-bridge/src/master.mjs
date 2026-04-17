@@ -1,7 +1,7 @@
 import http from 'node:http';
 import { URL } from 'node:url';
 import { v4 as uuidv4 } from 'uuid';
-import { HOST, PORT, NUM_WORKERS } from './config.mjs';
+import { HOST, PORT, NUM_WORKERS, getExecutable, PREFERRED_BROWSER } from './config.mjs';
 import {
   launchBrowser,
   closeBrowser,
@@ -9,6 +9,7 @@ import {
   startNewTemporaryChat,
   isGenerating
 } from './worker.mjs';
+import { buildPrompt } from './prompt-builder.mjs';
 
 // Worker pool
 const workers = new Map();
@@ -20,16 +21,33 @@ const pendingRequests = new Map();
 
 async function initWorkerPool() {
   console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers...`);
+  
+  // Kiểm tra Chrome/Edge trước
+  const executable = getExecutable();
+  if (!executable) {
+    throw new Error(`Không tìm thấy ${PREFERRED_BROWSER === 'chrome' ? 'Chrome' : 'Edge'}. Vui lòng cài đặt trình duyệt.`);
+  }
+  console.log(`[Master] Sử dụng browser: ${executable}`);
+  
+  let successCount = 0;
   for (let i = 0; i < NUM_WORKERS; i++) {
     const workerId = uuidv4();
     try {
       await launchBrowser();
       workers.set(workerId, { id: workerId, busy: false });
+      successCount++;
       console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng: ${workerId.slice(0, 8)}`);
     } catch (err) {
       console.error(`[Master] Lỗi worker ${i + 1}:`, err.message);
+      console.error(`[Master] Stack trace:`, err.stack);
     }
   }
+  
+  if (successCount === 0) {
+    throw new Error('Không thể khởi tạo bất kỳ worker nào. Kiểm tra Chrome/Edge và quyền truy cập.');
+  }
+  
+  console.log(`[Master] Đã khởi tạo ${successCount}/${NUM_WORKERS} workers thành công`);
 }
 
 function getAvailableWorker() {
@@ -148,12 +166,17 @@ async function handleChatStream(req, res) {
   req.on('data', chunk => body += chunk);
   req.on('end', async () => {
     try {
-      const { prompt, messages } = JSON.parse(body);
-      const text = prompt || (messages && messages.map(m => m.content).join('\n'));
+      const { prompt, messages, rules } = JSON.parse(body);
+      let text = prompt || (messages && messages.map(m => m.content).join('\n'));
 
       if (!text) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
+      }
+
+      // Build prompt với rules nếu có
+      if (rules && rules.length > 0) {
+        text = buildPrompt(rules, text);
       }
 
       const workerId = getAvailableWorker();

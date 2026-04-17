@@ -46,10 +46,14 @@ export default async function chatRoutes(fastify, options) {
     });
 
     try {
+      // Lấy rules từ service
+      const { getActiveRules } = await import('../services/rules.service.mjs');
+      const rules = getActiveRules();
+
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, messages })
+        body: JSON.stringify({ prompt, messages, rules })
       });
 
       const reader = response.body.getReader();

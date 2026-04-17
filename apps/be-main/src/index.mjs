@@ -20,7 +20,10 @@ fastify.get('/health', async () => ({
 
 // Import routes
 import chatRoutes from './routes/chat.mjs';
+import rulesRoutes from './routes/rules.mjs';
+
 fastify.register(chatRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL });
+fastify.register(rulesRoutes, { prefix: '/api' });
 
 // Start
 const start = async () => {
