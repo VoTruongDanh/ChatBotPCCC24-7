@@ -1,36 +1,103 @@
-# Dependencies
+# ============================================
+# DEPENDENCIES
+# ============================================
 node_modules/
+package-lock.json
 
-# Build outputs
+# ============================================
+# BUILD OUTPUTS
+# ============================================
 dist/
+build/
 .next/
 .turbo/
 out/
+*.tsbuildinfo
 
-# Environment
+# ============================================
+# ENVIRONMENT & CONFIG
+# ============================================
 .env
 .env.local
 .env.*.local
+*.env.backup
 
-# Logs
+# Module configs (keep examples)
+bridge/.env
+pccc/.env
+!bridge/.env.example
+!pccc/.env.example
+
+# ============================================
+# LOGS
+# ============================================
 *.log
+*.log.*
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
-# OS
+# ============================================
+# OS FILES
+# ============================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
-# IDE
+# ============================================
+# IDE & EDITORS
+# ============================================
 .idea/
 .vscode/
 *.swp
 *.swo
+*.swn
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
 
-# Bridge profile
+# ============================================
+# TEMPORARY FILES
+# ============================================
+*.tmp
+*.temp
+*.bak
+*.cache
+.cache/
+
+# ============================================
+# BRIDGE SPECIFIC
+# ============================================
 .bridge-chrome-profile/
 
-# Turbo cache
-.turbo
+# ============================================
+# AI GENERATED (DO NOT COMMIT)
+# ============================================
+*-COMPLETE.md
+*-APPLIED.md
+READY-TO-*.md
+SETUP-*.md
 
-# Codetemp (old project)
+# Keep important docs
+!README.md
+!CONFIG-MANAGEMENT.md
+!HOW-TO-RUN.md
+!QUICK-START.md
+
+# ============================================
+# OLD STRUCTURE (DEPRECATED)
+# ============================================
+apps/
+config/
 codetemp/

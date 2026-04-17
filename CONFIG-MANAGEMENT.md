@@ -1,43 +1,29 @@
-# Configuration Management System
+# Config Management
 
-## Tổng quan
+Hệ thống quản lý config module-based với 2 file .env độc lập.
 
-Hệ thống quản lý config tập trung với **single source of truth** ở root `.env`.
-
-## Cấu trúc
+## 📁 Cấu trúc
 
 ```
-.
-├── .env                          # ⭐ Single source of truth
-├── .env.example                  # Template
-├── config/
-│   ├── index.js                  # Master config
-│   ├── bridge.config.js          # Bridge system config
-│   └── main.config.js            # Main system config
-├── scripts/
-│   └── sync-config.mjs           # Sync script
-└── apps/
-    ├── be-bridge/.env            # Auto-generated
-    ├── be-main/.env              # Auto-generated
-    ├── ui/.env                   # Auto-generated
-    └── ui-bridge/.env            # Auto-generated
+bridge/.env          # Config cho bridge module
+pccc/.env            # Config cho pccc module
 ```
 
-## Workflow
+Mỗi module .env sẽ tự động sync sang app .env files.
 
-### 1. Chỉnh sửa config
+## 🔧 Workflow
 
-**Chỉ chỉnh sửa file root `.env`**:
+### 1. Edit Module Config
 
 ```bash
-# Edit root .env
-nano .env
+# Bridge module
+nano bridge/.env
 
-# hoặc
-code .env
+# PCCC module
+nano pccc/.env
 ```
 
-### 2. Sync config sang apps
+### 2. Sync to Apps
 
 ```bash
 npm run config:sync
@@ -45,257 +31,67 @@ npm run config:sync
 
 Output:
 ```
-🔄 Syncing configuration from root .env...
-
-✅ be-bridge       → apps/be-bridge/.env
-✅ be-main         → apps/be-main/.env
-✅ ui              → apps/ui/.env
-✅ ui-bridge       → apps/ui-bridge/.env
-
-✅ Synced 4/4 apps
+✅ be-bridge  → bridge/be-bridge/.env
+✅ ui-bridge  → bridge/ui-bridge/.env
+✅ be-main    → pccc/be-main/.env
+✅ ui         → pccc/ui/.env
 ```
 
-### 3. Xem config hiện tại
+### 3. Verify
 
 ```bash
-# Xem tất cả config
-npm run config
-
-# Xem config bridge
-npm run config:bridge
-
-# Xem config main
-npm run config:main
+# Check synced files
+cat bridge/be-bridge/.env
+cat pccc/be-main/.env
 ```
 
-### 4. Kiểm tra config
+## 🔑 Config Variables
 
-```bash
-npm run check-config
-```
-
-## Config Structure
-
-### Root .env
+### Bridge Module (`bridge/.env`)
 
 ```env
-# ============================================
-# BRIDGE SYSTEM
-# ============================================
+# Backend
 BRIDGE_HOST=127.0.0.1
 BRIDGE_PORT=1122
-BRIDGE_API_KEY=ACvxG%YkCOu7D+Pe
-BRIDGE_ADMIN_API_KEY=bridge_admin_default_key
+BRIDGE_API_KEY=your_key
+BRIDGE_ADMIN_API_KEY=admin_key
 BRIDGE_NUM_WORKERS=2
-...
+BRIDGE_PREFERRED_BROWSER=chrome
 
-# ============================================
-# MAIN SYSTEM
-# ============================================
+# Frontend
+UI_BRIDGE_PORT=3002
+NEXT_PUBLIC_BRIDGE_API_URL=http://localhost:1122
+NEXT_PUBLIC_ADMIN_API_KEY=admin_key
+```
+
+### PCCC Module (`pccc/.env`)
+
+```env
+# Backend
 MAIN_HOST=127.0.0.1
 MAIN_PORT=6969
 BRIDGE_URL=http://localhost:1122
-...
+BRIDGE_API_KEY=your_key
+
+# Frontend
+UI_PORT=3000
+NEXT_PUBLIC_API_URL=http://localhost:6969
 ```
 
-### Config Modules
+## ✅ Best Practices
 
-#### config/bridge.config.js
-```javascript
-const config = {
-  backend: { ... },    // be-bridge config
-  frontend: { ... },   // ui-bridge config
-  backendUrl: '...',   // Computed
-  frontendUrl: '...',  // Computed
-};
-```
+1. **Single Source**: Chỉ edit module .env, không edit app .env trực tiếp
+2. **Always Sync**: Sau khi edit, luôn chạy `npm run config:sync`
+3. **Same API Key**: `BRIDGE_API_KEY` phải giống nhau ở bridge và pccc
+4. **Version Control**: Commit `.env.example`, không commit `.env`
 
-#### config/main.config.js
-```javascript
-const config = {
-  backend: { ... },    // be-main config
-  frontend: { ... },   // ui config
-  backendUrl: '...',   // Computed
-  frontendUrl: '...',  // Computed
-};
-```
+## 🔒 Security
 
-#### config/index.js
-```javascript
-const config = {
-  bridge: bridgeConfig,
-  main: mainConfig,
-  allServices: { ... },
-  validatePorts() { ... },
-};
-```
+- Module `.env` files trong `.gitignore`
+- API keys không được hardcode trong code
+- Sử dụng `.env.example` làm template
 
-## Sử dụng trong code
+## 📚 Xem thêm
 
-### Backend (Node.js)
-
-```javascript
-// be-bridge/src/config.mjs
-import bridgeConfig from '../../config/bridge.config.js';
-
-export const HOST = bridgeConfig.backend.host;
-export const PORT = bridgeConfig.backend.port;
-export const NUM_WORKERS = bridgeConfig.backend.numWorkers;
-```
-
-### Frontend (Next.js)
-
-```javascript
-// ui-bridge/src/app/page.tsx
-const BRIDGE_API_URL = process.env.NEXT_PUBLIC_BRIDGE_API_URL;
-const ADMIN_API_KEY = process.env.NEXT_PUBLIC_ADMIN_API_KEY;
-```
-
-## Lợi ích
-
-### ✅ Single Source of Truth
-- Chỉ cần chỉnh sửa 1 file `.env` ở root
-- Không còn config phân tán
-
-### ✅ Đồng bộ tự động
-- Script sync tự động tạo `.env` cho từng app
-- Đảm bảo consistency
-
-### ✅ Validation
-- Validate config khi load
-- Kiểm tra port conflicts
-- Kiểm tra required fields
-
-### ✅ Type Safety
-- Config modules có structure rõ ràng
-- Computed properties
-- Easy to use trong code
-
-### ✅ Environment Support
-- Development
-- Production
-- Staging
-- Custom environments
-
-## Best Practices
-
-### 1. Luôn sync sau khi edit
-
-```bash
-# Edit
-nano .env
-
-# Sync
-npm run config:sync
-
-# Verify
-npm run check-config
-```
-
-### 2. Không edit app .env trực tiếp
-
-❌ **Không làm**:
-```bash
-nano apps/be-bridge/.env
-```
-
-✅ **Làm**:
-```bash
-nano .env
-npm run config:sync
-```
-
-### 3. Commit .env.example, không commit .env
-
-```gitignore
-# .gitignore
-.env
-apps/*/.env
-
-# Keep examples
-!.env.example
-!apps/*/.env.example
-```
-
-### 4. Sử dụng config modules trong code
-
-❌ **Không làm**:
-```javascript
-const port = process.env.BRIDGE_PORT || 1122;
-```
-
-✅ **Làm**:
-```javascript
-import bridgeConfig from '../../config/bridge.config.js';
-const port = bridgeConfig.backend.port;
-```
-
-## Migration từ hệ thống cũ
-
-### Bước 1: Backup
-```bash
-cp apps/be-bridge/.env apps/be-bridge/.env.backup
-cp apps/be-main/.env apps/be-main/.env.backup
-```
-
-### Bước 2: Copy values vào root .env
-```bash
-# Manually copy values from app .env files to root .env
-```
-
-### Bước 3: Sync
-```bash
-npm run config:sync
-```
-
-### Bước 4: Verify
-```bash
-npm run check-config
-npm run dev
-```
-
-## Troubleshooting
-
-### Config không sync
-
-```bash
-# Check root .env exists
-ls -la .env
-
-# Run sync with verbose
-node scripts/sync-config.mjs
-```
-
-### Port conflicts
-
-```bash
-# Check ports
-npm run config
-
-# Look for "Ports validation: FAILED"
-```
-
-### Missing variables
-
-```bash
-# Check validation
-npm run config:bridge
-npm run config:main
-```
-
-## Scripts Reference
-
-| Script | Description |
-|--------|-------------|
-| `npm run config` | Xem tất cả config |
-| `npm run config:bridge` | Xem bridge config |
-| `npm run config:main` | Xem main config |
-| `npm run config:sync` | Sync root .env → apps |
-| `npm run check-config` | Kiểm tra config |
-
-## Liên kết
-
-- [Root .env](./.env)
-- [Config Modules](./config/)
-- [Sync Script](./scripts/sync-config.mjs)
-- [HOW-TO-RUN.md](./HOW-TO-RUN.md)
+- [QUICK-START.md](QUICK-START.md) - Quick setup
+- [HOW-TO-RUN.md](HOW-TO-RUN.md) - Development guide

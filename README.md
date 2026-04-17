@@ -1,14 +1,32 @@
 # PCCC Consult Web
 
-Hệ thống tư vấn Phòng cháy chữa cháy sử dụng AI Chat.
+Hệ thống tư vấn Phòng cháy chữa cháy sử dụng AI Chat với kiến trúc module độc lập.
 
-## Kiến trúc
+## 📦 Cấu trúc Module
+
+```
+.
+├── bridge/              # Module độc lập - có thể tái sử dụng
+│   ├── .env            # Config cho bridge
+│   ├── be-bridge/      # Backend (Puppeteer + ChatGPT)
+│   └── ui-bridge/      # Admin dashboard
+│
+├── pccc/               # Module chính - ứng dụng PCCC
+│   ├── .env            # Config cho pccc
+│   ├── be-main/        # Backend API
+│   └── ui/             # Frontend người dùng
+│
+└── scripts/
+    └── sync-config.mjs # Sync config tool
+```
+
+## 🏗️ Kiến trúc
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
 │   UI        │────▶│  be-main    │────▶│  be-bridge  │
 │  Next.js 15 │     │  Fastify    │     │  Puppeteer  │
-│  Port 3000  │     │  Port 3001  │     │  Port 1122  │
+│  Port 3000  │     │  Port 6969  │     │  Port 1122  │
 └─────────────┘     └─────────────┘     └─────────────┘
                                                │
                                                ▼
@@ -18,209 +36,106 @@ Hệ thống tư vấn Phòng cháy chữa cháy sử dụng AI Chat.
                                         └─────────────┘
 ```
 
-## Cài đặt
+## 🚀 Quick Start
 
 ```bash
+# 1. Install
 npm install
-```
 
-## Cấu hình
+# 2. Config (edit module .env files)
+nano bridge/.env
+nano pccc/.env
 
-```bash
-cp apps/be-bridge/.env.example apps/be-bridge/.env
-cp apps/be-main/.env.example apps/be-main/.env
-cp apps/ui/.env.example apps/ui/.env.local
-```
+# 3. Sync config to apps
+npm run config:sync
 
-## Chạy Development
-
-```bash
-# Tất cả services
+# 4. Run
 npm run dev
-
-# Hoặc riêng lẻ
-npm run dev:bridge   # Port 1122
-npm run dev:main     # Port 3001
-npm run dev:ui       # Port 3000
 ```
 
-## API Endpoints
+## 📚 Documentation
+
+- **[QUICK-START.md](QUICK-START.md)** - Hướng dẫn cài đặt và chạy nhanh
+- **[CONFIG-MANAGEMENT.md](CONFIG-MANAGEMENT.md)** - Quản lý config module
+- **[HOW-TO-RUN.md](HOW-TO-RUN.md)** - Chi tiết về development và deployment
+- **[bridge/ADMIN-GUIDE.md](bridge/ADMIN-GUIDE.md)** - Hướng dẫn sử dụng Bridge Admin Dashboard
+
+## 🔑 Ports
+
+| Service | Port | Module |
+|---------|------|--------|
+| be-bridge | 1122 | bridge |
+| ui-bridge | 3002 | bridge |
+| be-main | 6969 | pccc |
+| ui | 3000 | pccc |
+
+## 🛠️ Tech Stack
+
+**Bridge Module:**
+- Backend: Node.js + Puppeteer + Puppeteer-Extra
+- Frontend: Next.js 15 + React 18 + Tailwind CSS
+
+**PCCC Module:**
+- Backend: Fastify + Node.js
+- Frontend: Next.js 15 + React 18 + Tailwind CSS
+
+## 📝 Scripts
+
+```bash
+npm run dev              # Run all services
+npm run dev:be-bridge    # Bridge backend only
+npm run dev:ui-bridge    # Bridge admin only
+npm run dev:be-main      # PCCC backend only
+npm run dev:ui           # PCCC frontend only
+npm run config:sync      # Sync module .env to apps
+```
+
+## 🔐 Authentication
+
+Bridge module sử dụng API key authentication:
+- `BRIDGE_API_KEY` - Cho be-main kết nối be-bridge
+- `BRIDGE_ADMIN_API_KEY` - Cho ui-bridge admin dashboard
+
+## 🌐 API Endpoints
 
 ### be-bridge (Port 1122)
+- `GET /ping` - Health check
+- `GET /health` - Worker status
+- `POST /internal/bridge/chat` - Non-streaming chat
+- `POST /internal/bridge/chat/stream` - SSE streaming chat
+- `POST /internal/bridge/reset-temp-chat` - Reset session
 
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/ping` | GET | Health check |
-| `/health` | GET | Trạng thái workers |
-| `/internal/bridge/chat` | POST | Chat non-streaming |
-| `/internal/bridge/chat/stream` | POST | Chat SSE streaming |
-| `/internal/bridge/reset-temp-chat` | POST | Reset session |
+### be-main (Port 6969)
+- `GET /health` - Health check
+- `POST /api/chat/stream` - Proxy chat with rules
+- `POST /api/reset` - Reset session
+- `GET /api/rules` - Get PCCC rules
+- `PUT /api/rules` - Update rules
 
-### be-main (Port 3001)
+## 🔄 Tái sử dụng Bridge Module
 
-| Endpoint | Method | Mô tả |
-|----------|--------|-------|
-| `/health` | GET | Health check |
-| `/api/chat` | POST | Proxy chat |
-| `/api/chat/stream` | POST | Proxy chat SSE |
-| `/api/reset` | POST | Reset session |
-
-## Docker
+Bridge module hoàn toàn độc lập, có thể copy sang dự án khác:
 
 ```bash
-cd apps/be-main
-docker-compose up -d
+# Copy module
+cp -r bridge/ /path/to/other-project/
+
+# Config
+cd /path/to/other-project/bridge
+nano .env
+
+# Run
+npm install
+npm run dev
 ```
 
-## Yêu cầu
+## 📦 Yêu cầu
 
 - Node.js 18+
 - Chrome hoặc Edge (Windows)
+- npm hoặc yarn
 
+## 📄 License
 
-## Luồng hoạt động
-
-### Bước 1: Người dùng hỏi
-```
-User: "Quy định về bình chữa cháy là gì?"
-```
-
-### Bước 2: UI gửi request
-```
-UI → POST /api/chat/stream
-Body: { prompt: "Quy định về bình chữa cháy là gì?" }
-```
-
-### Bước 3: be-main xử lý
-```
-be-main nhận request
-    ↓
-Lấy rules từ rules.json
-    ↓
-Forward đến be-bridge với rules
-```
-
-### Bước 4: be-bridge build prompt
-```
-=== VAI TRÒ ===
-Bạn là chuyên gia tư vấn PCCC
-
-=== KIẾN THỨC PCCC ===
-[Quy định, tiêu chuẩn PCCC...]
-
-=== HƯỚNG DẪN ===
-Trả lời ngắn gọn, chính xác
-
-=== CÂU HỎI ===
-Quy định về bình chữa cháy là gì?
-```
-
-### Bước 5: Worker gửi đến ChatGPT
-```
-Worker (browser instance)
-    ↓
-Tìm ô nhập tin nhắn trên ChatGPT
-    ↓
-Nhập prompt → Enter
-    ↓
-Đợi ChatGPT trả lời
-```
-
-### Bước 6: Streaming response
-```
-ChatGPT bắt đầu viết: "Theo quy định..."
-    ↓
-Worker đọc từng phần: "Theo", " quy", " định"...
-    ↓
-Gửi SSE event mỗi lần có text mới:
-    data: {"delta": "Theo"}
-    data: {"delta": " quy"}
-    data: {"delta": " định"}
-```
-
-### Bước 7: UI hiển thị real-time
-```
-UI nhận SSE stream
-    ↓
-Hiển thị từng chữ: "Theo quy định..."
-    ↓
-Nhận event done: {"done": true, "response": "..."}
-    ↓
-Hoàn thành
-```
-
-### Sơ đồ tuần tự
-
-```
-┌──────┐         ┌─────────┐         ┌──────────┐         ┌─────────┐
-│ User │         │   UI    │         │ be-main  │         │be-bridge│
-└──┬───┘         └────┬────┘         └────┬─────┘         └────┬────┘
-   │                  │                   │                    │
-   │ Nhập câu hỏi     │                   │                    │
-   │─────────────────>│                   │                    │
-   │                  │                   │                    │
-   │                  │ POST /chat/stream │                    │
-   │                  │──────────────────>│                    │
-   │                  │                   │                    │
-   │                  │                   │ Forward + rules    │
-   │                  │                   │───────────────────>│
-   │                  │                   │                    │
-   │                  │                   │                    │ Build prompt
-   │                  │                   │                    │──────┐
-   │                  │                   │                    │      │
-   │                  │                   │                    │<─────┘
-   │                  │                   │                    │
-   │                  │                   │                    │ Gửi ChatGPT
-   │                  │                   │                    │──────┐
-   │                  │                   │                    │      │
-   │                  │                   │                    │<─────┘
-   │                  │                   │                    │
-   │                  │                   │    SSE stream      │
-   │                  │                   │<───────────────────│
-   │                  │                   │  {"delta": "..."}  │
-   │                  │                   │                    │
-   │                  │  SSE stream       │                    │
-   │                  │<──────────────────│                    │
-   │                  │ {"delta": "..."}  │                    │
-   │                  │                   │                    │
-   │ Hiển thị text    │                   │                    │
-   │<─────────────────│                   │                    │
-   │                  │                   │                    │
-```
-
-
-## Authentication
-
-### API Key giữa be-main và be-bridge
-
-Để bảo mật communication giữa be-main và be-bridge, cần cấu hình API key:
-
-1. Tạo API key ngẫu nhiên (VD: sử dụng `openssl rand -hex 32`)
-2. Cấu hình trong cả 2 file `.env`:
-
-**apps/be-main/.env:**
-```bash
-BRIDGE_API_KEY=your-secure-api-key-here
-```
-
-**apps/be-bridge/.env:**
-```bash
-BRIDGE_API_KEY=your-secure-api-key-here
-```
-
-Nếu không cấu hình `BRIDGE_API_KEY`, authentication sẽ bị tắt (không khuyến nghị cho production).
-
-### Headers
-
-be-main tự động thêm header `X-Bridge-API-Key` khi gọi be-bridge.
-
-## Tích hợp be-bridge vào hệ thống khác
-
-Xem hướng dẫn chi tiết tại: [apps/be-bridge/INTEGRATION.md](apps/be-bridge/INTEGRATION.md)
-
-**Tóm tắt:**
-- API Key authentication qua header `X-Bridge-API-Key`
-- Rules structure rõ ràng với 3 loại: `system`, `context`, `instruction`
-- SSE streaming response
-- Type definitions trong `apps/be-bridge/src/types.mjs`
+MIT
 

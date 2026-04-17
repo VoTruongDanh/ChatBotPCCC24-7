@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Admin API module for be-bridge
  * 
  * Provides endpoints for:
@@ -8,7 +8,8 @@
  * - System monitoring
  */
 
-import 'dotenv/config';
+// dotenv already loaded by config.mjs
+console.log('[Admin] ADMIN_API_KEY:', ADMIN_API_KEY);
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -116,6 +117,11 @@ export function validateAdminKey(req) {
     return { valid: false, error: 'Missing admin API key' };
   }
   
+  // Check against ADMIN_API_KEY from .env first
+  if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) {
+    return { valid: true, keyId: 'env-key' };
+  }
+
   // Check if key exists in our store
   for (const [id, keyInfo] of adminKeys) {
     if (keyInfo.key === providedKey && keyInfo.active) {

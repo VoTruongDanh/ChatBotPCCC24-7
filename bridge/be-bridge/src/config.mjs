@@ -1,17 +1,22 @@
-/**
+﻿/**
  * Bridge Configuration Module
  * Import từ root config để có single source of truth
  */
 
-import 'dotenv/config';
+import { config } from 'dotenv';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load root config
+// Define __dirname first
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Load .env from app directory
+config({ path: join(__dirname, '..', '.env') });
+
+// Load root config
 const rootConfigPath = join(__dirname, '../../../config/bridge.config.js');
 
 let bridgeConfig;

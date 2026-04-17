@@ -1,210 +1,281 @@
-# Hướng dẫn chạy dự án
+# How to Run
 
-## Cấu trúc dự án
+Chi tiết về development, testing, và deployment.
 
-```
-.
-├── apps/
-│   ├── be-bridge/      # Bridge backend service (port 1122)
-│   ├── be-main/        # Main API backend (port 6969)
-│   ├── ui/             # Main frontend (port 3000)
-│   └── ui-bridge/      # Bridge admin frontend (port 3002)
-├── package.json        # Root package.json
-├── turbo.json          # Turbo configuration
-└── HOW-TO-RUN.md       # File này
-```
+## 🛠️ Development
 
-## Cách 1: Chạy tất cả services cùng lúc (Khuyên dùng)
+### Run All Services
 
 ```bash
-# Từ thư mục root
 npm run dev
 ```
 
-Lệnh này sẽ chạy đồng thời 4 services:
-- **be-bridge**: http://localhost:1122 (Bridge Backend API)
-- **be-main**: http://localhost:6969 (Main Backend API)
-- **ui**: http://localhost:3000 (Main Frontend)
-- **ui-bridge**: http://localhost:3002 (Bridge Admin Frontend)
+Turbo sẽ chạy tất cả services song song:
+- `bridge/be-bridge` - Port 1122
+- `bridge/ui-bridge` - Port 3002
+- `pccc/be-main` - Port 6969
+- `pccc/ui` - Port 3000
 
-## Cách 2: Chạy từng service riêng biệt
+### Run Individual Services
 
-### Terminal 1: be-bridge (Bridge Backend)
 ```bash
-npm run dev:bridge
-# hoặc
-cd apps/be-bridge && npm run dev
-```
+# Bridge backend only
+npm run dev:be-bridge
 
-### Terminal 2: be-main (Main Backend)
-```bash
-npm run dev:main
-# hoặc
-cd apps/be-main && npm run dev
-```
-
-### Terminal 3: ui (Main Frontend)
-```bash
-npm run dev:ui
-# hoặc
-cd apps/ui && npm run dev
-```
-
-### Terminal 4: ui-bridge (Bridge Admin Frontend)
-```bash
+# Bridge admin only
 npm run dev:ui-bridge
-# hoặc
-cd apps/ui-bridge && npm run dev
+
+# PCCC backend only
+npm run dev:be-main
+
+# PCCC frontend only
+npm run dev:ui
 ```
 
-## Truy cập ứng dụng
+### Watch Mode
 
-### Main Frontend (UI)
-- **Trang chủ**: http://localhost:3000
-- **Admin Rules**: http://localhost:3000/admin
+Tất cả services đều có hot-reload:
+- Backend: `--watch` flag
+- Frontend: Next.js Fast Refresh
 
-### Bridge Admin Dashboard (ui-bridge)
-- **Admin Dashboard**: http://localhost:3002
-- Quản lý cấu hình be-bridge
-- Quản lý API keys
-- Quản lý workers
-- Theo dõi trạng thái hệ thống
+## 🏗️ Build
 
-### Backend APIs
-- **be-bridge**: http://localhost:1122
-  - Health: http://localhost:1122/health
-  - Admin API: http://localhost:1122/admin/*
-  
-- **be-main**: http://localhost:6969
-  - Health: http://localhost:6969/health
-  - API: http://localhost:6969/api/*
-
-## Kiểm tra services đang chạy
+### Build All
 
 ```bash
-# Kiểm tra be-bridge
-curl http://localhost:1122/ping
+npm run build
+```
 
-# Kiểm tra be-main
+### Build Individual
+
+```bash
+npm run build:bridge    # ui-bridge only
+npm run build:pccc      # ui only
+```
+
+Build output:
+- Next.js: `.next/` directory
+- Static export: `out/` directory (nếu config)
+
+## 🚀 Production
+
+### Start All
+
+```bash
+npm run start
+```
+
+### Start Individual
+
+Backend services không có start script (chạy trực tiếp):
+```bash
+# Bridge backend
+cd bridge/be-bridge
+node src/master.mjs
+
+# PCCC backend
+cd pccc/be-main
+node src/index.mjs
+```
+
+Frontend services:
+```bash
+# Bridge admin
+cd bridge/ui-bridge
+npm run start
+
+# PCCC UI
+cd pccc/ui
+npm run start
+```
+
+## 🐳 Docker
+
+### PCCC Backend
+
+```bash
+cd pccc/be-main
+docker-compose up -d
+```
+
+Docker compose sẽ:
+- Build image từ Dockerfile
+- Expose port 6969
+- Mount volumes cho hot-reload
+
+### Custom Docker
+
+```dockerfile
+# Example Dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+CMD ["node", "src/index.mjs"]
+```
+
+## 🧪 Testing
+
+### Health Checks
+
+```bash
+# All services
+curl http://localhost:1122/health
 curl http://localhost:6969/health
-
-# Kiểm tra UI
 curl http://localhost:3000
-
-# Kiểm tra ui-bridge
 curl http://localhost:3002
 ```
 
-## Bridge Admin Dashboard (ui-bridge)
-
-### Truy cập
-Mở trình duyệt và truy cập: **http://localhost:3002**
-
-### Tính năng
-1. **Quản lý Cấu hình**: Thay đổi host, port, số lượng workers, browser settings
-2. **Quản lý API Keys**: Tạo, kích hoạt, xóa API keys cho be-main
-3. **Quản lý Workers**: Thêm/xóa workers, xem trạng thái
-4. **Theo dõi Trạng thái**: Uptime, memory, worker stats
-
-### Default Admin Key
-- Key mặc định: `bridge_admin_default_key`
-- Được tạo tự động khi be-bridge khởi động
-- Lưu trong memory (không persist sau restart)
-
-### Tạo API Key cho be-main
-1. Truy cập http://localhost:3002
-2. Chuyển sang tab "API Keys"
-3. Nhập tên key và nhấn "Tạo Key"
-4. Copy key được tạo
-5. Thêm vào file `apps/be-main/.env`:
-   ```env
-   BRIDGE_API_KEY=<key_vừa_tạo>
-   ```
-
-## Build cho production
+### API Testing
 
 ```bash
-# Build tất cả
-npm run build
+# Non-streaming chat
+curl -X POST http://localhost:6969/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Test message"}'
 
-# Build chỉ UI
-npm run build:ui
-
-# Build chỉ ui-bridge
-npm run build:ui-bridge
+# With rules
+curl -X POST http://localhost:6969/api/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Quy định PCCC?",
+    "rules": [
+      {"type": "system", "content": "Bạn là chuyên gia PCCC"}
+    ]
+  }'
 ```
 
-## Start production
+### Load Testing
 
 ```bash
-# Start tất cả
-npm run start
+# Install autocannon
+npm install -g autocannon
 
-# Start từng service
-npm run start:bridge
-npm run start:main
-npm run start:ui
-npm run start:ui-bridge
+# Test endpoint
+autocannon -c 10 -d 30 http://localhost:6969/health
 ```
 
-## Khắc phục sự cố
+## 🔍 Debugging
 
-### Lỗi "Port already in use"
+### Backend Logs
+
 ```bash
-# Windows - Tìm process sử dụng port
+# Bridge backend
+cd bridge/be-bridge
+DEBUG=* node src/master.mjs
+
+# PCCC backend
+cd pccc/be-main
+DEBUG=* node src/index.mjs
+```
+
+### Frontend Logs
+
+Next.js logs tự động hiển thị trong terminal.
+
+### Browser DevTools
+
+Bridge backend sử dụng Puppeteer:
+```javascript
+// Thêm vào worker.mjs để debug
+const browser = await puppeteer.launch({
+  headless: false,  // Show browser
+  devtools: true    // Open DevTools
+});
+```
+
+## 📊 Monitoring
+
+### Worker Status
+
+```bash
+# Check bridge workers
+curl http://localhost:1122/health
+
+# Response:
+{
+  "status": "ok",
+  "workers": 2,
+  "available": 2,
+  "generating": 0
+}
+```
+
+### Admin Dashboard
+
+Truy cập http://localhost:3002 để xem:
+- Worker status
+- API keys
+- System metrics
+- Configuration
+
+## 🔧 Troubleshooting
+
+### Port Conflicts
+
+```bash
+# Find process using port
 netstat -ano | findstr :1122
-netstat -ano | findstr :6969
-netstat -ano | findstr :3000
-netstat -ano | findstr :3002
 
-# Kill process (thay PID bằng số process)
-taskkill /PID <PID> /F
+# Kill process
+taskkill /PID <pid> /F
 ```
 
-### Lỗi "Module not found"
+### Worker Crashes
+
 ```bash
-# Cài đặt lại dependencies
-npm install
+# Check logs
+cd bridge/be-bridge
+node src/master.mjs
 
-# Hoặc cài đặt cho từng app
-cd apps/be-bridge && npm install
-cd apps/be-main && npm install
-cd apps/ui && npm install
-cd apps/ui-bridge && npm install
+# Common issues:
+# - Chrome not found
+# - Port already in use
+# - Memory limit
 ```
 
-### Lỗi "Cannot connect to be-bridge"
-1. Kiểm tra be-bridge có đang chạy không
-2. Truy cập http://localhost:1122/ping để kiểm tra
-3. Kiểm tra file `.env` trong `apps/ui-bridge/`
+### Build Errors
 
-### Lỗi "Admin dashboard not found"
-1. Kiểm tra ui-bridge có đang chạy không
-2. Truy cập http://localhost:3002 để kiểm tra
-3. Kiểm tra file `.env` trong `apps/ui-bridge/`
+```bash
+# Clean build cache
+rm -rf bridge/ui-bridge/.next
+rm -rf pccc/ui/.next
+rm -rf .turbo
 
-## Lưu ý quan trọng
+# Rebuild
+npm run build
+```
 
-1. **Chrome/Edge**: be-bridge yêu cầu Chrome hoặc Edge được cài đặt
-2. **Environment files**: Đảm bảo có file `.env` trong mỗi thư mục app
-3. **First run**: Lần đầu chạy sẽ mất thời gian để tải dependencies
-4. **Hot reload**: Tất cả services hỗ trợ hot reload khi thay đổi code
+## 🌍 Environment Variables
 
-## Development workflow
+### Development
 
-1. **Start services**: `npm run dev`
-2. **Open browser**: 
-   - Main UI: http://localhost:3000
-   - Bridge Admin: http://localhost:3002
-3. **Code changes**: Tự động reload
-4. **Check logs**: Xem terminal để debug
-5. **Stop services**: `Ctrl+C` trong terminal
+```env
+NODE_ENV=development
+LOG_LEVEL=debug
+```
 
-## Ports Summary
+### Production
 
-| Service | Port | URL | Description |
-|---------|------|-----|-------------|
-| be-bridge | 1122 | http://localhost:1122 | Bridge Backend API |
-| be-main | 6969 | http://localhost:6969 | Main Backend API |
-| ui | 3000 | http://localhost:3000 | Main Frontend |
-| ui-bridge | 3002 | http://localhost:3002 | Bridge Admin Frontend |
+```env
+NODE_ENV=production
+LOG_LEVEL=info
+```
+
+### Custom
+
+```env
+# Bridge
+BRIDGE_NUM_WORKERS=4
+BRIDGE_HIDE_WINDOW=true
+
+# PCCC
+BRIDGE_TIMEOUT=60000
+```
+
+## 📚 Xem thêm
+
+- [README.md](README.md) - Project overview
+- [QUICK-START.md](QUICK-START.md) - Quick setup
+- [CONFIG-MANAGEMENT.md](CONFIG-MANAGEMENT.md) - Config details
