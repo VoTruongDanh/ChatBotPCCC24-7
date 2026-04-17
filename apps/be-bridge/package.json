@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node src/master.mjs",
-    "dev": "node --watch src/master.mjs"
+    "start": "node -r dotenv/config src/master.mjs dotenv_config_path=./apps/be-bridge/.env",
+    "dev": "node --watch -r dotenv/config src/master.mjs dotenv_config_path=./apps/be-bridge/.env"
   },
   "dependencies": {
     "dotenv": "^16.0.0",

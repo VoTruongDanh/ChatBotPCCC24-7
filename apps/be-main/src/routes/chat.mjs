@@ -1,5 +1,15 @@
 export default async function chatRoutes(fastify, options) {
   const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1122';
+  const BRIDGE_API_KEY = options.bridgeApiKey || '';
+
+  // Helper to add auth header if configured
+  const getHeaders = () => {
+    const headers = { 'Content-Type': 'application/json' };
+    if (BRIDGE_API_KEY) {
+      headers['X-Bridge-API-Key'] = BRIDGE_API_KEY;
+    }
+    return headers;
+  };
 
   // POST /api/chat - Non-streaming
   fastify.post('/chat', async (request, reply) => {
@@ -12,7 +22,7 @@ export default async function chatRoutes(fastify, options) {
     try {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({ prompt, messages })
       });
 
@@ -52,7 +62,7 @@ export default async function chatRoutes(fastify, options) {
 
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getHeaders(),
         body: JSON.stringify({ prompt, messages, rules })
       });
 
@@ -79,7 +89,8 @@ export default async function chatRoutes(fastify, options) {
   fastify.post('/reset', async (request, reply) => {
     try {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/reset-temp-chat`, {
-        method: 'POST'
+        method: 'POST',
+        headers: getHeaders()
       });
 
       const data = await response.json();

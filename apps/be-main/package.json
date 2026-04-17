@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node src/index.mjs",
-    "dev": "node --watch src/index.mjs"
+    "start": "node -r dotenv/config src/index.mjs dotenv_config_path=./apps/be-main/.env",
+    "dev": "node --watch -r dotenv/config src/index.mjs dotenv_config_path=./apps/be-main/.env"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.0",

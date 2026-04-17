@@ -10,6 +10,7 @@ import {
   isGenerating
 } from './worker.mjs';
 import { buildPrompt } from './prompt-builder.mjs';
+import { validateApiKey, sendUnauthorized, isAuthConfigured } from './auth.mjs';
 
 // Worker pool
 const workers = new Map();
@@ -73,20 +74,20 @@ const server = http.createServer(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-API-Key');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     return res.end();
   }
 
-  // Route: GET /ping
+  // Route: GET /ping (no auth required)
   if (pathname === '/ping' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ pong: true, time: Date.now() }));
   }
 
-  // Route: GET /health
+  // Route: GET /health (no auth required)
   if (pathname === '/health' && req.method === 'GET') {
     const available = [...workers.values()].filter(w => !w.busy).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -94,8 +95,15 @@ const server = http.createServer(async (req, res) => {
       status: 'ok',
       workers: workers.size,
       available,
-      generating: [...workers.values()].filter(w => w.busy).length
+      generating: [...workers.values()].filter(w => w.busy).length,
+      authEnabled: isAuthConfigured()
     }));
+  }
+
+  // All other routes require authentication
+  const auth = validateApiKey(req);
+  if (!auth.valid) {
+    return sendUnauthorized(res, auth.error);
   }
 
   // Route: POST /internal/bridge/chat
@@ -238,6 +246,11 @@ async function start() {
     server.listen(PORT, HOST, () => {
       console.log(`[Master] be-bridge running at http://${HOST}:${PORT}`);
       console.log(`[Master] Endpoints: /ping, /health, /internal/bridge/chat, /internal/bridge/chat/stream, /internal/bridge/reset-temp-chat`);
+      if (isAuthConfigured()) {
+        console.log(`[Master] Authentication: ENABLED`);
+      } else {
+        console.log(`[Master] Authentication: DISABLED (no BRIDGE_API_KEY set)`);
+      }
     });
   } catch (err) {
     console.error('[Master] Lỗi khởi động:', err);
