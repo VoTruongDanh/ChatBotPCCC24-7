@@ -1,0 +1,25 @@
+{
+  "name": "pccc-consult-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Hệ thống tư vấn Phòng cháy chữa cháy sử dụng AI Chat",
+  "packageManager": "npm@10.0.0",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:bridge": "npm run start --workspace=apps/be-bridge",
+    "dev:main": "npm run start --workspace=apps/be-main",
+    "dev:ui": "npm run dev --workspace=apps/ui",
+    "build": "turbo run build",
+    "build:ui": "npm run build --workspace=apps/ui",
+    "start": "turbo run start",
+    "clean": "turbo run clean && rm -rf node_modules",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

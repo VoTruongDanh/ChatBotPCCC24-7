@@ -1,0 +1,12 @@
+services:
+  be-main:
+    build: .
+    ports:
+      - "3001:3001"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=3001
+      - BRIDGE_URL=http://host.docker.internal:1122
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
