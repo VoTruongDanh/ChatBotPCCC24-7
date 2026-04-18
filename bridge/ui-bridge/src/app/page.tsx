@@ -101,6 +101,7 @@ export default function BridgeAdminPage() {
   const [showApiKey, setShowApiKey] = useState<string | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [configForm, setConfigForm] = useState<Partial<BridgeConfig>>({});
+  const [browserRunning, setBrowserRunning] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -118,11 +119,12 @@ export default function BridgeAdminPage() {
         'Content-Type': 'application/json'
       };
 
-      const [configRes, keysRes, workersRes, statusRes] = await Promise.all([
+      const [configRes, keysRes, workersRes, statusRes, browserRes] = await Promise.all([
         fetch(`${BRIDGE_API_URL}/admin/config`, { headers }).catch(() => null),
         fetch(`${BRIDGE_API_URL}/admin/keys`, { headers }).catch(() => null),
         fetch(`${BRIDGE_API_URL}/admin/workers`, { headers }).catch(() => null),
-        fetch(`${BRIDGE_API_URL}/admin/status`, { headers }).catch(() => null)
+        fetch(`${BRIDGE_API_URL}/admin/status`, { headers }).catch(() => null),
+        fetch(`${BRIDGE_API_URL}/admin/browser`, { headers }).catch(() => null)
       ]);
 
       if (configRes?.ok) {
@@ -133,12 +135,17 @@ export default function BridgeAdminPage() {
 
       if (keysRes?.ok) {
         const keysData = await keysRes.json();
-        setApiKeys(keysData.keys);
+        setApiKeys(keysData.keys || []);
       }
 
       if (workersRes?.ok) {
         const workersData = await workersRes.json();
-        setWorkers(workersData.workers);
+        setWorkers(workersData.workers || []);
+      }
+
+      if (browserRes?.ok) {
+        const browserData = await browserRes.json();
+        setBrowserRunning(browserData.running);
       }
 
       if (statusRes?.ok) {
@@ -233,7 +240,54 @@ export default function BridgeAdminPage() {
     }
   };
 
-  const handleToggleKey = async (keyId: string, active: boolean) => {
+  
+  const handleShowBrowser = async () => {
+    try {
+      const headers = {
+        'X-Admin-API-Key': ADMIN_API_KEY,
+        'Content-Type': 'application/json'
+      };
+
+      const res = await fetch(`${BRIDGE_API_URL}/admin/browser`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'show' })
+      });
+
+      if (res.ok) {
+        setSuccessMessage('?? hi?n c?a s? ChatGPT');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        fetchData();
+      }
+    } catch (err) {
+      setError('Kh?ng th? hi?n c?a s? ChatGPT');
+    }
+  };
+
+  const handleHideBrowser = async () => {
+    try {
+      const headers = {
+        'X-Admin-API-Key': ADMIN_API_KEY,
+        'Content-Type': 'application/json'
+      };
+
+      const res = await fetch(`${BRIDGE_API_URL}/admin/browser`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ action: 'hide' })
+      });
+
+      if (res.ok) {
+        setSuccessMessage('?? ?n c?a s? ChatGPT');
+        setTimeout(() => setSuccessMessage(null), 3000);
+        fetchData();
+      }
+    } catch (err) {
+      setError('Kh?ng th? ?n c?a s? ChatGPT');
+    }
+  };
+
+const handleToggleKey = async (keyId: string, active: boolean) => {
     try {
       const headers = {
         'X-Admin-API-Key': ADMIN_API_KEY,
@@ -643,7 +697,7 @@ export default function BridgeAdminPage() {
 
               {/* Keys List */}
               <div>
-                <h3 className="font-medium mb-3">Danh sách API Keys ({apiKeys.length})</h3>
+                <h3 className="font-medium mb-3">Danh sách API Keys ({apiKeys?.length || 0})</h3>
                 <div className="space-y-3">
                   {apiKeys.map(key => (
                     <div key={key.id} className="border rounded-lg p-4">
@@ -693,7 +747,7 @@ export default function BridgeAdminPage() {
                     </div>
                   ))}
                   
-                  {apiKeys.length === 0 && (
+                  {apiKeys?.length === 0 && (
                     <p className="text-center text-gray-500 py-8">
                       Chưa có API key nào. Hãy tạo key đầu tiên.
                     </p>
@@ -714,18 +768,18 @@ export default function BridgeAdminPage() {
               {/* Worker Stats */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-blue-50 p-4 rounded-lg">
-                  <div className="text-2xl font-bold">{workers.length}</div>
+                  <div className="text-2xl font-bold">{workers?.length || 0}</div>
                   <div className="text-sm text-blue-700">Tổng số Workers</div>
                 </div>
                 <div className="bg-green-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold">
-                    {workers.filter(w => !w.busy).length}
+                    {workers?.filter(w => !w.busy).length}
                   </div>
                   <div className="text-sm text-green-700">Workers sẵn sàng</div>
                 </div>
                 <div className="bg-yellow-50 p-4 rounded-lg">
                   <div className="text-2xl font-bold">
-                    {workers.filter(w => w.busy).length}
+                    {workers?.filter(w => w.busy).length}
                   </div>
                   <div className="text-sm text-yellow-700">Workers đang xử lý</div>
                 </div>
@@ -742,9 +796,9 @@ export default function BridgeAdminPage() {
                 </button>
                 <button
                   onClick={handleRemoveWorker}
-                  disabled={workers.filter(w => !w.busy).length === 0}
+                  disabled={workers?.filter(w => !w.busy).length === 0}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg ${
-                    workers.filter(w => !w.busy).length === 0
+                    workers?.filter(w => !w.busy).length === 0
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       : 'bg-red-600 text-white hover:bg-red-700'
                   }`}
@@ -778,7 +832,7 @@ export default function BridgeAdminPage() {
                     </div>
                   ))}
                   
-                  {workers.length === 0 && (
+                  {workers?.length === 0 && (
                     <p className="text-center text-gray-500 py-8">
                       Không có worker nào đang hoạt động
                     </p>

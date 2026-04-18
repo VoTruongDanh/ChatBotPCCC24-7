@@ -9,7 +9,7 @@
  */
 
 // dotenv already loaded by config.mjs
-console.log('[Admin] ADMIN_API_KEY:', ADMIN_API_KEY);
+
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -20,7 +20,7 @@ import {
   STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL,
   API_KEY, ADMIN_API_KEY
 } from './config.mjs';
-import { launchBrowser, closeBrowser, isGenerating } from './worker.mjs';
+import { launchBrowser, closeBrowser, isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
 import { isAuthConfigured } from './auth.mjs';
 
 // In-memory store for admin API keys (in production, use database)
@@ -111,6 +111,7 @@ function generateApiKey(name = 'New Key') {
  * Validate admin API key
  */
 export function validateAdminKey(req) {
+  
   const providedKey = req.headers['x-admin-api-key'] || req.headers['X-Admin-API-Key'] || '';
   
   if (!providedKey) {
@@ -118,7 +119,8 @@ export function validateAdminKey(req) {
   }
   
   // Check against ADMIN_API_KEY from .env first
-  if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) {
+  
+    if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) {
     return { valid: true, keyId: 'env-key' };
   }
 
@@ -379,6 +381,51 @@ export async function handleAdminWorkers(req, res, workers) {
   }
 }
 
+
+export async function handleAdminBrowser(req, res) {
+  const auth = validateAdminKey(req);
+  if (!auth.valid) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: auth.error }));
+  }
+  
+  if (req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ running: isBrowserRunning() }));
+  } else if (req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', async () => {
+      try {
+        const { action } = JSON.parse(body);
+        
+        if (action === 'show') {
+          await showBrowserWindow();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Browser window shown' }));
+        } else if (action === 'hide') {
+          await hideBrowserWindow();
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Browser window hidden' }));
+        } else {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Invalid action. Use "show" or "hide"' }));
+        }
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+      }
+    });
+  } else {
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+  }
+}
 // Initialize with a default admin key for first-time setup
 const defaultAdminKey = generateApiKey('Default Admin Key');
 console.log(`[Admin] Default admin key generated: ${defaultAdminKey.key.slice(0, 8)}...`);
+
+
+
+
+

@@ -299,6 +299,7 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
   onChange: (v: string) => void;
 }) {
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const canSend = input.trim() && !loading && connectionStatus === 'connected';
   const { ref: sendRef, trigger: ripple } = useRipple();
   const magRef = useMagnetic(0.25);
@@ -306,6 +307,10 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
   const handleSubmit = (e: React.FormEvent) => {
     ripple();
     onSubmit(e);
+    // Keep focus on input after submit
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
   };
 
   return (
@@ -324,6 +329,7 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
       </div>
       <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
+          ref={inputRef}
           className="pccc-field"
           type="text"
           value={input}
@@ -491,48 +497,48 @@ export default function ChatPage() {
         /* ── Theme Tokens (light default + dark override) ── */
         :root, :root[data-theme="light"] {
           --r: #dc2626; --r2: #ef4444; --ember: #f97316; --gold: #fbbf24;
-          --bg: #ffffff; --bg2: #f8f5f3; --bg3: #f2ede9;
-          --surface: rgba(255,255,255,0.85); --surface2: rgba(255,255,255,0.6);
-          --border: rgba(0,0,0,0.08); --border2: rgba(0,0,0,0.14);
-          --text: #111827; --text2: #6b7280; --text3: #9ca3af;
-          --shadow: 0 4px 24px rgba(0,0,0,0.08);
-          --shadow-lg: 0 12px 48px rgba(0,0,0,0.12);
+          --bg: #fafafa; --bg2: #f5f5f5; --bg3: #eeeeee;
+          --surface: rgba(255,255,255,0.9); --surface2: rgba(255,255,255,0.7);
+          --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.16);
+          --text: #0f172a; --text2: #475569; --text3: #94a3b8;
+          --shadow: 0 4px 24px rgba(0,0,0,0.1);
+          --shadow-lg: 0 12px 48px rgba(0,0,0,0.15);
           --orb1: rgba(220,38,38,0.12); --orb2: rgba(249,115,22,0.08);
-          --nav-bg: rgba(255,255,255,0.85);
-          --input-bg: rgba(255,255,255,0.95);
-          --bubble-ai-bg: rgba(255,255,255,0.95);
-          --bubble-ai-border: rgba(0,0,0,0.08);
-          --chip-bg: rgba(255,255,255,0.7);
-          --chip-hover-bg: rgba(220,38,38,0.06);
+          --nav-bg: rgba(255,255,255,0.9);
+          --input-bg: rgba(255,255,255,0.98);
+          --bubble-ai-bg: rgba(255,255,255,0.98);
+          --bubble-ai-border: rgba(0,0,0,0.1);
+          --chip-bg: rgba(255,255,255,0.8);
+          --chip-hover-bg: rgba(220,38,38,0.08);
         }
         :root[data-theme="dark"] {
-          --bg: #0c0704; --bg2: #160b06; --bg3: #1f1009;
-          --surface: rgba(28,14,8,0.85); --surface2: rgba(20,10,5,0.7);
-          --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-          --text: #f5f0ec; --text2: rgba(245,240,236,0.65); --text3: rgba(245,240,236,0.4);
-          --shadow: 0 4px 24px rgba(0,0,0,0.4); --shadow-lg: 0 12px 48px rgba(0,0,0,0.6);
-          --orb1: rgba(220,38,38,0.2); --orb2: rgba(249,115,22,0.14);
-          --nav-bg: rgba(12,7,4,0.85);
-          --input-bg: rgba(22,11,6,0.95);
-          --bubble-ai-bg: rgba(28,14,8,0.95);
-          --bubble-ai-border: rgba(255,255,255,0.08);
-          --chip-bg: rgba(28,14,8,0.7);
-          --chip-hover-bg: rgba(220,38,38,0.15);
+          --bg: #050301; --bg2: #0d0805; --bg3: #160f0a;
+          --surface: rgba(20,10,6,0.9); --surface2: rgba(15,8,4,0.75);
+          --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+          --text: #fef3e2; --text2: rgba(254,243,226,0.75); --text3: rgba(254,243,226,0.5);
+          --shadow: 0 4px 24px rgba(0,0,0,0.6); --shadow-lg: 0 12px 48px rgba(0,0,0,0.8);
+          --orb1: rgba(220,38,38,0.25); --orb2: rgba(249,115,22,0.18);
+          --nav-bg: rgba(5,3,1,0.9);
+          --input-bg: rgba(13,8,5,0.95);
+          --bubble-ai-bg: rgba(20,10,6,0.95);
+          --bubble-ai-border: rgba(255,255,255,0.1);
+          --chip-bg: rgba(20,10,6,0.8);
+          --chip-hover-bg: rgba(220,38,38,0.2);
         }
         @media (prefers-color-scheme: dark) {
           :root:not([data-theme]) {
-            --bg: #0c0704; --bg2: #160b06; --bg3: #1f1009;
-            --surface: rgba(28,14,8,0.85); --surface2: rgba(20,10,5,0.7);
-            --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.14);
-            --text: #f5f0ec; --text2: rgba(245,240,236,0.65); --text3: rgba(245,240,236,0.4);
-            --shadow: 0 4px 24px rgba(0,0,0,0.4); --shadow-lg: 0 12px 48px rgba(0,0,0,0.6);
-            --orb1: rgba(220,38,38,0.2); --orb2: rgba(249,115,22,0.14);
-            --nav-bg: rgba(12,7,4,0.85);
-            --input-bg: rgba(22,11,6,0.95);
-            --bubble-ai-bg: rgba(28,14,8,0.95);
-            --bubble-ai-border: rgba(255,255,255,0.08);
-            --chip-bg: rgba(28,14,8,0.7);
-            --chip-hover-bg: rgba(220,38,38,0.15);
+            --bg: #050301; --bg2: #0d0805; --bg3: #160f0a;
+            --surface: rgba(20,10,6,0.9); --surface2: rgba(15,8,4,0.75);
+            --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.18);
+            --text: #fef3e2; --text2: rgba(254,243,226,0.75); --text3: rgba(254,243,226,0.5);
+            --shadow: 0 4px 24px rgba(0,0,0,0.6); --shadow-lg: 0 12px 48px rgba(0,0,0,0.8);
+            --orb1: rgba(220,38,38,0.25); --orb2: rgba(249,115,22,0.18);
+            --nav-bg: rgba(5,3,1,0.9);
+            --input-bg: rgba(13,8,5,0.95);
+            --bubble-ai-bg: rgba(20,10,6,0.95);
+            --bubble-ai-border: rgba(255,255,255,0.1);
+            --chip-bg: rgba(20,10,6,0.8);
+            --chip-hover-bg: rgba(220,38,38,0.2);
           }
         }
 
@@ -763,24 +769,24 @@ export default function ChatPage() {
         .pccc-field {
           flex: 1; background: transparent; border: none; outline: none;
           font-size: 15px; font-family: inherit;
-          font-weight: 400; caret-color: var(--ember); letter-spacing: -0.1px;
+          font-weight: 500; caret-color: var(--ember); letter-spacing: -0.2px;
           min-width: 0;
         }
         :root[data-theme="light"] .pccc-field, :root:not([data-theme]) .pccc-field {
-          color: #111827;
+          color: #1f2937;
         }
         :root[data-theme="light"] .pccc-field::placeholder, :root:not([data-theme]) .pccc-field::placeholder {
           color: #9ca3af;
         }
         :root[data-theme="dark"] .pccc-field {
-          color: #f5f0ec;
+          color: #fef3e2;
         }
         :root[data-theme="dark"] .pccc-field::placeholder {
-          color: rgba(245,240,236,0.4);
+          color: rgba(254,243,226,0.5);
         }
         @media (prefers-color-scheme: dark) {
-          :root:not([data-theme]) .pccc-field { color: #f5f0ec; }
-          :root:not([data-theme]) .pccc-field::placeholder { color: rgba(245,240,236,0.4); }
+          :root:not([data-theme]) .pccc-field { color: #fef3e2; }
+          :root:not([data-theme]) .pccc-field::placeholder { color: rgba(254,243,226,0.5); }
         }
         .pccc-field:disabled { cursor: not-allowed; opacity: 0.5; }
 

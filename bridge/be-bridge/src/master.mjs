@@ -1,12 +1,12 @@
-import { config } from 'dotenv';
+﻿import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load .env từ thư mục của app TRƯỚC khi import các module khác
+// Load .env tá»« thÆ° má»¥c cá»§a app TRÆ¯á»šC khi import cÃ¡c module khÃ¡c
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '..', '.env') });
 
-// Import các module SAU khi đã load .env
+// Import cÃ¡c module SAU khi Ä‘Ã£ load .env
 import http from 'node:http';
 import { URL } from 'node:url';
 import { v4 as uuidv4 } from 'uuid';
@@ -25,7 +25,7 @@ import {
   handleAdminKeys, 
   handleAdminKeyDetail, 
   handleAdminStatus, 
-  handleAdminWorkers 
+  handleAdminWorkers, handleAdminBrowser 
 } from './admin.mjs';
 
 // Worker pool
@@ -37,14 +37,14 @@ const pendingRequests = new Map();
 // ============================================
 
 async function initWorkerPool() {
-  console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers...`);
+  console.log(`[Master] Khá»Ÿi táº¡o ${NUM_WORKERS} workers...`);
   
-  // Kiểm tra Chrome/Edge trước
+  // Kiá»ƒm tra Chrome/Edge trÆ°á»›c
   const executable = getExecutable();
   if (!executable) {
-    throw new Error(`Không tìm thấy ${PREFERRED_BROWSER === 'chrome' ? 'Chrome' : 'Edge'}. Vui lòng cài đặt trình duyệt.`);
+    throw new Error(`KhÃ´ng tÃ¬m tháº¥y ${PREFERRED_BROWSER === 'chrome' ? 'Chrome' : 'Edge'}. Vui lÃ²ng cÃ i Ä‘áº·t trÃ¬nh duyá»‡t.`);
   }
-  console.log(`[Master] Sử dụng browser: ${executable}`);
+  console.log(`[Master] Sá»­ dá»¥ng browser: ${executable}`);
   
   let successCount = 0;
   for (let i = 0; i < NUM_WORKERS; i++) {
@@ -53,18 +53,18 @@ async function initWorkerPool() {
       await launchBrowser();
       workers.set(workerId, { id: workerId, busy: false });
       successCount++;
-      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng: ${workerId.slice(0, 8)}`);
+      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sáºµn sÃ ng: ${workerId.slice(0, 8)}`);
     } catch (err) {
-      console.error(`[Master] Lỗi worker ${i + 1}:`, err.message);
+      console.error(`[Master] Lá»—i worker ${i + 1}:`, err.message);
       console.error(`[Master] Stack trace:`, err.stack);
     }
   }
   
   if (successCount === 0) {
-    throw new Error('Không thể khởi tạo bất kỳ worker nào. Kiểm tra Chrome/Edge và quyền truy cập.');
+    throw new Error('KhÃ´ng thá»ƒ khá»Ÿi táº¡o báº¥t ká»³ worker nÃ o. Kiá»ƒm tra Chrome/Edge vÃ  quyá»n truy cáº­p.');
   }
   
-  console.log(`[Master] Đã khởi tạo ${successCount}/${NUM_WORKERS} workers thành công`);
+  console.log(`[Master] ÄÃ£ khá»Ÿi táº¡o ${successCount}/${NUM_WORKERS} workers thÃ nh cÃ´ng`);
 }
 
 function getAvailableWorker() {
@@ -117,6 +117,32 @@ const server = http.createServer(async (req, res) => {
     }));
   }
 
+  
+  // Admin routes (require admin API key)
+  if (pathname === '/admin/config' && (req.method === 'GET' || req.method === 'PUT')) {
+    return handleAdminConfig(req, res);
+  }
+  
+  if (pathname === '/admin/keys' && (req.method === 'GET' || req.method === 'POST')) {
+    return handleAdminKeys(req, res);
+  }
+  
+  if (pathname.startsWith('/admin/keys/')) {
+    const keyId = pathname.split('/')[3];
+    return handleAdminKeyDetail(req, res, keyId);
+  }
+  
+  if (pathname === '/admin/status' && req.method === 'GET') {
+    return handleAdminStatus(req, res, workers);
+  }
+  
+  if (pathname === '/admin/browser' && (req.method === 'GET' || req.method === 'POST')) {
+    return handleAdminBrowser(req, res);
+  }
+  
+  if (pathname === '/admin/workers' && (req.method === 'GET' || req.method === 'POST' || req.method === 'DELETE')) {
+    return handleAdminWorkers, handleAdminBrowser(req, res, workers);
+  }
   // All other routes require authentication
   const auth = validateApiKey(req);
   if (!auth.valid) {
@@ -138,27 +164,6 @@ const server = http.createServer(async (req, res) => {
     return handleResetChat(req, res);
   }
 
-  // Admin routes (require admin API key)
-  if (pathname === '/admin/config' && (req.method === 'GET' || req.method === 'PUT')) {
-    return handleAdminConfig(req, res);
-  }
-  
-  if (pathname === '/admin/keys' && (req.method === 'GET' || req.method === 'POST')) {
-    return handleAdminKeys(req, res);
-  }
-  
-  if (pathname.startsWith('/admin/keys/')) {
-    const keyId = pathname.split('/')[3];
-    return handleAdminKeyDetail(req, res, keyId);
-  }
-  
-  if (pathname === '/admin/status' && req.method === 'GET') {
-    return handleAdminStatus(req, res, workers);
-  }
-  
-  if (pathname === '/admin/workers' && (req.method === 'GET' || req.method === 'POST' || req.method === 'DELETE')) {
-    return handleAdminWorkers(req, res, workers);
-  }
 
   // 404
   res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -179,17 +184,17 @@ async function handleChat(req, res) {
 
       if (!text) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
+        return res.end(JSON.stringify({ error: 'Thiáº¿u prompt hoáº·c messages' }));
       }
 
       const workerId = getAvailableWorker();
       if (!workerId) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Không có worker sẵn sàng' }));
+        return res.end(JSON.stringify({ error: 'KhÃ´ng cÃ³ worker sáºµn sÃ ng' }));
       }
 
       setWorkerBusy(workerId, true);
-      console.log(`[Master] Chat request từ worker ${workerId.slice(0, 8)}`);
+      console.log(`[Master] Chat request tá»« worker ${workerId.slice(0, 8)}`);
 
       try {
         const response = await sendPromptAndWaitResponse(text);
@@ -218,10 +223,10 @@ async function handleChatStream(req, res) {
 
       if (!text) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
+        return res.end(JSON.stringify({ error: 'Thiáº¿u prompt hoáº·c messages' }));
       }
 
-      // Build prompt với rules nếu có
+      // Build prompt vá»›i rules náº¿u cÃ³
       if (rules && rules.length > 0) {
         text = buildPrompt(rules, text);
       }
@@ -229,7 +234,7 @@ async function handleChatStream(req, res) {
       const workerId = getAvailableWorker();
       if (!workerId) {
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Không có worker sẵn sàng' }));
+        return res.end(JSON.stringify({ error: 'KhÃ´ng cÃ³ worker sáºµn sÃ ng' }));
       }
 
       setWorkerBusy(workerId, true);
@@ -242,7 +247,7 @@ async function handleChatStream(req, res) {
         'Access-Control-Allow-Origin': '*'
       });
 
-      console.log(`[Master] Stream request từ worker ${workerId.slice(0, 8)}`);
+      console.log(`[Master] Stream request tá»« worker ${workerId.slice(0, 8)}`);
 
       try {
         const response = await sendPromptAndWaitResponse(text, (delta) => {
@@ -292,19 +297,22 @@ async function start() {
       }
     });
   } catch (err) {
-    console.error('[Master] Lỗi khởi động:', err);
+    console.error('[Master] Lá»—i khá»Ÿi Ä‘á»™ng:', err);
     process.exit(1);
   }
 }
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('\n[Master] Đang đóng service...');
+  console.log('\n[Master] Äang Ä‘Ã³ng service...');
   await closeBrowser();
   server.close(() => {
-    console.log('[Master] Service đã đóng');
+    console.log('[Master] Service Ä‘Ã£ Ä‘Ã³ng');
     process.exit(0);
   });
 });
 
 start();
+
+
+
