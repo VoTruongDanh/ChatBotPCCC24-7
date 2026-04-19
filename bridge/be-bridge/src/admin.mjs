@@ -13,6 +13,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { 
   HOST, PORT, NUM_WORKERS, PREFERRED_BROWSER, CHAT_URL, HIDE_WINDOW,
   LAUNCH_MINIMIZED, LAUNCH_OFFSCREEN, PROFILE_DIR,
@@ -20,12 +21,63 @@ import {
   STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL,
   API_KEY, ADMIN_API_KEY
 } from './config.mjs';
-import { launchBrowser, closeBrowser, isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
+import { isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
 import { isAuthConfigured } from './auth.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // In-memory store for admin API keys (in production, use database)
 const adminKeys = new Map();
-const configFilePath = path.join(process.cwd(), '.env');
+// Always resolve next to be-bridge (same as dotenv in master.mjs), not process.cwd()
+const configFilePath = path.join(__dirname, '..', '.env');
+
+/** @returns {Record<string, string>} */
+function readEnvIntoMap(filePath) {
+  const out = {};
+  if (!fs.existsSync(filePath)) return out;
+  const raw = fs.readFileSync(filePath, 'utf8');
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const i = t.indexOf('=');
+    if (i === -1) continue;
+    const k = t.slice(0, i).trim();
+    const v = t.slice(i + 1);
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Preserve key order from file; new keys appended */
+function readEnvKeyOrder(filePath) {
+  const order = [];
+  if (!fs.existsSync(filePath)) return order;
+  const raw = fs.readFileSync(filePath, 'utf8');
+  for (const line of raw.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t || t.startsWith('#')) continue;
+    const i = t.indexOf('=');
+    if (i === -1) continue;
+    const k = t.slice(0, i).trim();
+    if (!order.includes(k)) order.push(k);
+  }
+  return order;
+}
+
+function writeEnvMerged(filePath, merged, preferredOrder) {
+  const seen = new Set();
+  const lines = [];
+  for (const k of preferredOrder) {
+    if (merged[k] === undefined) continue;
+    lines.push(`${k}=${merged[k]}`);
+    seen.add(k);
+  }
+  for (const k of Object.keys(merged).sort()) {
+    if (seen.has(k)) continue;
+    lines.push(`${k}=${merged[k]}`);
+  }
+  fs.writeFileSync(filePath, `${lines.join('\n')}\n`);
+}
 
 /**
  * Load current configuration from .env file
@@ -53,36 +105,60 @@ function loadCurrentConfig() {
 }
 
 /**
- * Save configuration to .env file
+ * Save configuration to .env file (merge; keep ui-bridge NEXT_PUBLIC_* and other keys)
+ * Uses same variable names as config.mjs / bridge/.env.example
  */
 function saveConfig(newConfig) {
-  const envLines = [];
-  
-  // Add all config values
-  envLines.push(`HOST=${newConfig.HOST || HOST}`);
-  envLines.push(`PORT=${newConfig.PORT || PORT}`);
-  envLines.push(`NUM_WORKERS=${newConfig.NUM_WORKERS || NUM_WORKERS}`);
-  envLines.push(`BRIDGE_PREFERRED_BROWSER=${newConfig.PREFERRED_BROWSER || PREFERRED_BROWSER}`);
-  envLines.push(`CHAT_URL=${newConfig.CHAT_URL || CHAT_URL}`);
-  envLines.push(`BRIDGE_HIDE_CHAT_WINDOW=${newConfig.HIDE_WINDOW ? 'true' : 'false'}`);
-  envLines.push(`BRIDGE_LAUNCH_MINIMIZED=${newConfig.LAUNCH_MINIMIZED ? 'true' : 'false'}`);
-  envLines.push(`BRIDGE_LAUNCH_OFFSCREEN=${newConfig.LAUNCH_OFFSCREEN ? 'true' : 'false'}`);
-  envLines.push(`BRIDGE_PROFILE_DIR=${newConfig.PROFILE_DIR || PROFILE_DIR}`);
-  envLines.push(`STREAM_NO_CHANGE_THRESHOLD=${newConfig.STREAM_NO_CHANGE_THRESHOLD || STREAM_NO_CHANGE_THRESHOLD}`);
-  envLines.push(`STREAM_FALLBACK_THRESHOLD=${newConfig.STREAM_FALLBACK_THRESHOLD || STREAM_FALLBACK_THRESHOLD}`);
-  envLines.push(`STREAM_MAX_TIMEOUT=${newConfig.STREAM_MAX_TIMEOUT || STREAM_MAX_TIMEOUT}`);
-  envLines.push(`STREAM_START_TIMEOUT=${newConfig.STREAM_START_TIMEOUT || STREAM_START_TIMEOUT}`);
-  envLines.push(`STREAM_CHECK_INTERVAL=${newConfig.STREAM_CHECK_INTERVAL || STREAM_CHECK_INTERVAL}`);
-  
-  // Only save API key if provided (for security)
-  if (newConfig.BRIDGE_API_KEY) {
-    envLines.push(`BRIDGE_API_KEY=${newConfig.BRIDGE_API_KEY}`);
-  } else if (process.env.BRIDGE_API_KEY) {
-    envLines.push(`BRIDGE_API_KEY=${process.env.BRIDGE_API_KEY}`);
+  const preferredOrder = readEnvKeyOrder(configFilePath);
+  const merged = readEnvIntoMap(configFilePath);
+
+  const legacyKeys = new Set([
+    'HOST',
+    'PORT',
+    'NUM_WORKERS',
+    'CHAT_URL',
+    'STREAM_NO_CHANGE_THRESHOLD',
+    'STREAM_FALLBACK_THRESHOLD',
+    'STREAM_MAX_TIMEOUT',
+    'STREAM_START_TIMEOUT',
+    'STREAM_CHECK_INTERVAL',
+    'BRIDGE_HIDE_CHAT_WINDOW'
+  ]);
+  for (const k of legacyKeys) {
+    delete merged[k];
   }
-  
+
+  const boolStr = (v) => (v ? 'true' : 'false');
+
+  merged.BRIDGE_HOST = String(newConfig.HOST ?? HOST);
+  merged.BRIDGE_PORT = String(newConfig.PORT ?? PORT);
+  merged.BRIDGE_NUM_WORKERS = String(newConfig.NUM_WORKERS ?? NUM_WORKERS);
+  merged.BRIDGE_PREFERRED_BROWSER = String(newConfig.PREFERRED_BROWSER ?? PREFERRED_BROWSER);
+  merged.BRIDGE_CHAT_URL = String(newConfig.CHAT_URL ?? CHAT_URL);
+  merged.BRIDGE_HIDE_WINDOW = boolStr(Boolean(newConfig.HIDE_WINDOW));
+  merged.BRIDGE_LAUNCH_MINIMIZED = boolStr(Boolean(newConfig.LAUNCH_MINIMIZED));
+  merged.BRIDGE_LAUNCH_OFFSCREEN = boolStr(Boolean(newConfig.LAUNCH_OFFSCREEN));
+  merged.BRIDGE_PROFILE_DIR = String(newConfig.PROFILE_DIR ?? PROFILE_DIR);
+  merged.BRIDGE_STREAM_NO_CHANGE_THRESHOLD = String(
+    newConfig.STREAM_NO_CHANGE_THRESHOLD ?? STREAM_NO_CHANGE_THRESHOLD
+  );
+  merged.BRIDGE_STREAM_FALLBACK_THRESHOLD = String(
+    newConfig.STREAM_FALLBACK_THRESHOLD ?? STREAM_FALLBACK_THRESHOLD
+  );
+  merged.BRIDGE_STREAM_MAX_TIMEOUT = String(newConfig.STREAM_MAX_TIMEOUT ?? STREAM_MAX_TIMEOUT);
+  merged.BRIDGE_STREAM_START_TIMEOUT = String(newConfig.STREAM_START_TIMEOUT ?? STREAM_START_TIMEOUT);
+  merged.BRIDGE_STREAM_CHECK_INTERVAL = String(newConfig.STREAM_CHECK_INTERVAL ?? STREAM_CHECK_INTERVAL);
+
+  if (newConfig.BRIDGE_API_KEY && String(newConfig.BRIDGE_API_KEY).trim()) {
+    merged.BRIDGE_API_KEY = String(newConfig.BRIDGE_API_KEY).trim();
+  }
+
+  if (newConfig.BRIDGE_ADMIN_API_KEY && String(newConfig.BRIDGE_ADMIN_API_KEY).trim()) {
+    merged.BRIDGE_ADMIN_API_KEY = String(newConfig.BRIDGE_ADMIN_API_KEY).trim();
+  }
+
   try {
-    fs.writeFileSync(configFilePath, envLines.join('\n'));
+    writeEnvMerged(configFilePath, merged, preferredOrder);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
@@ -311,30 +387,26 @@ export async function handleAdminWorkers(req, res, workers) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ workers: workerList }));
   } else if (req.method === 'POST') {
-    // Add new worker
+    // Add logical worker slots (single shared Puppeteer browser in worker.mjs)
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', async () => {
+    req.on('end', () => {
       try {
         const { count = 1 } = JSON.parse(body);
         let successCount = 0;
-        
-        for (let i = 0; i < count; i++) {
+        const n = Math.min(20, Math.max(1, Number(count) || 1));
+
+        for (let i = 0; i < n; i++) {
           const workerId = uuidv4();
-          try {
-            await launchBrowser();
-            workers.set(workerId, { id: workerId, busy: false });
-            successCount++;
-          } catch (err) {
-            console.error(`Failed to add worker ${i + 1}:`, err.message);
-          }
+          workers.set(workerId, { id: workerId, busy: false });
+          successCount++;
         }
-        
+
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ 
-          success: true, 
+        res.end(JSON.stringify({
+          success: true,
           added: successCount,
-          total: workers.size 
+          total: workers.size
         }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -421,11 +493,5 @@ export async function handleAdminBrowser(req, res) {
     res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 }
-// Initialize with a default admin key for first-time setup
-const defaultAdminKey = generateApiKey('Default Admin Key');
-console.log(`[Admin] Default admin key generated: ${defaultAdminKey.key.slice(0, 8)}...`);
-
-
-
 
 

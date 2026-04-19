@@ -21,7 +21,7 @@ import {
 puppeteerExtra.use(StealthPlugin());
 
 // ============================================
-// PHáº¦N 3a: CORE FUNCTIONS
+// PHẦN 3a: CORE FUNCTIONS
 // ============================================
 
 let browser = null;
@@ -30,7 +30,7 @@ let page = null;
 export async function launchBrowser() {
   const executablePath = getExecutable();
   if (!executablePath) {
-    throw new Error('KhÃ´ng tÃ¬m tháº¥y Chrome/Edge executable');
+    throw new Error('Không tìm thấy Chrome/Edge executable');
   }
 
   const args = [
@@ -129,7 +129,7 @@ export function isBrowserRunning() {
 export async function findInput() {
   if (!page) return null;
   try {
-    // Thá»­ nhiá»u selector khÃ¡c nhau cho ChatGPT
+    // Thử nhiều selector khác nhau cho ChatGPT
     const selectors = [
       'textarea#prompt-textarea',
       'textarea[placeholder*="Message"]',
@@ -144,15 +144,15 @@ export async function findInput() {
     for (const selector of selectors) {
       const element = await page.$(selector);
       if (element) {
-        console.log(`[Worker] TÃ¬m tháº¥y input vá»›i selector: ${selector}`);
+        console.log(`[Worker] Tìm thấy input với selector: ${selector}`);
         return element;
       }
     }
 
-    console.warn('[Worker] KhÃ´ng tÃ¬m tháº¥y input vá»›i báº¥t ká»³ selector nÃ o');
+    console.warn('[Worker] Không tìm thấy input với bất kỳ selector nào');
     return null;
   } catch (err) {
-    console.error('[Worker] Lá»—i khi tÃ¬m input:', err.message);
+    console.error('[Worker] Lỗi khi tìm input:', err.message);
     return null;
   }
 }
@@ -160,7 +160,7 @@ export async function findInput() {
 export async function waitForGenerationDone(timeout = 120000) {
   if (!page) return false;
   try {
-    // Äá»£i nÃºt stop biáº¿n máº¥t (Ä‘ang generate)
+    // Đợi nút stop biến mất (đang generate)
     await page.waitForFunction(() => {
       const stopBtn = document.querySelector('[data-testid="stop-generating"], button[aria-label="Stop generating"]');
       return !stopBtn || stopBtn.style.display === 'none';
@@ -201,21 +201,21 @@ export async function readLatestAssistant() {
 export async function isGenerating() {
   if (!page) return false;
   try {
-    // Thá»­ nhiá»u cÃ¡ch phÃ¡t hiá»‡n Ä‘ang generate
+    // Thử nhiều cách phát hiện đang generate
     const result = await page.evaluate(() => {
-      // CÃ¡ch 1: TÃ¬m stop button (visible)
+      // Cách 1: Tìm stop button (visible)
       const stopBtn = document.querySelector('[data-testid="stop-generating"], button[aria-label="Stop generating"], button[aria-label*="Stop"]');
       if (stopBtn && stopBtn.offsetParent !== null && window.getComputedStyle(stopBtn).display !== 'none') {
         return true;
       }
       
-      // CÃ¡ch 2: Kiá»ƒm tra streaming indicator
+      // Cách 2: Kiểm tra streaming indicator
       const streamingIndicator = document.querySelector('[data-testid="streaming-indicator"]');
       if (streamingIndicator && streamingIndicator.offsetParent !== null) {
         return true;
       }
       
-      // CÃ¡ch 3: Kiá»ƒm tra cursor blinking trong response cuá»‘i
+      // Cách 3: Kiểm tra cursor blinking trong response cuối
       const responses = document.querySelectorAll('[data-message-author-role="assistant"]');
       if (responses.length > 0) {
         const lastResponse = responses[responses.length - 1];
@@ -225,78 +225,78 @@ export async function isGenerating() {
         }
       }
       
-      // CÃ¡ch 4: Kiá»ƒm tra button send bá»‹ disable (Ä‘ang generate)
+      // Cách 4: Kiểm tra button send bị disable (đang generate)
       const sendBtn = document.querySelector('button[data-testid="send-button"], button[aria-label="Send message"]');
       if (sendBtn && sendBtn.disabled) {
         return true;
       }
       
-      // KhÃ´ng tÃ¬m tháº¥y dáº¥u hiá»‡u nÃ o â†’ khÃ´ng Ä‘ang generate
+      // Không tìm thấy dấu hiệu nào → không đang generate
       return false;
     });
     
     return result;
   } catch (err) {
-    console.warn('[Worker] Lá»—i kiá»ƒm tra isGenerating:', err.message);
-    // Náº¿u lá»—i, coi nhÆ° khÃ´ng Ä‘ang generate (Ä‘á»ƒ khÃ´ng bá»‹ treo)
+    console.warn('[Worker] Lỗi kiểm tra isGenerating:', err.message);
+    // Nếu lỗi, coi như không đang generate (để không bị treo)
     return false;
   }
 }
 
 // ============================================
-// PHáº¦N 3b: IPC HANDLER + SEND PROMPT
+// PHẦN 3b: IPC HANDLER + SEND PROMPT
 // ============================================
 
 export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
   if (!page) {
-    throw new Error('Browser chÆ°a Ä‘Æ°á»£c khá»Ÿi táº¡o');
+    throw new Error('Browser chưa được khởi tạo');
   }
 
   const input = await findInput();
   if (!input) {
-    throw new Error('KhÃ´ng tÃ¬m tháº¥y input textarea hoáº·c contenteditable');
+    throw new Error('Không tìm thấy input textarea hoặc contenteditable');
   }
 
-  // Kiá»ƒm tra loáº¡i input
+  // Kiểm tra loại input
   const tagName = await input.evaluate(el => el.tagName.toLowerCase());
   const isContentEditable = await input.evaluate(el => el.contentEditable === 'true');
 
   console.log(`[Worker] Input type: ${tagName}, contentEditable: ${isContentEditable}`);
 
-  // Clear vÃ  type
+  // Clear và type
   await input.click({ clickCount: 3 });
   
   if (isContentEditable) {
-    // Vá»›i contenteditable div
+    // Với contenteditable div
     await input.evaluate((el, text) => {
       el.textContent = text;
       // Trigger input event
       el.dispatchEvent(new Event('input', { bubbles: true }));
     }, prompt);
   } else {
-    // Vá»›i textarea
+    // Với textarea
     await page.keyboard.type(prompt, { delay: 30 });
   }
 
-  // Äá»£i má»™t chÃºt Ä‘á»ƒ UI update
+  // Đợi một chút để UI update
   await new Promise(r => setTimeout(r, 500));
 
-  // Gá»­i - thá»­ nhiá»u cÃ¡ch
+  // Gửi - thử nhiều cách
   try {
-    // CÃ¡ch 1: Enter key
+    // Cách 1: Enter key
     await page.keyboard.press('Enter');
   } catch (err) {
-    console.warn('[Worker] KhÃ´ng thá»ƒ gá»­i báº±ng Enter, thá»­ click button');
-    // CÃ¡ch 2: Click send button
+    console.warn('[Worker] Không thể gửi bằng Enter, thử click button');
+    // Cách 2: Click send button
     const sendBtn = await page.$('button[data-testid="send-button"], button[aria-label="Send message"]');
     if (sendBtn) {
       await sendBtn.click();
     } else {
-      throw new Error('KhÃ´ng thá»ƒ gá»­i message');
+      throw new Error('Không thể gửi message');
     }
   }
 
-  // Äá»£i response báº¯t Ä‘áº§u (tá»‘i Ä‘a tá»« config)
+  // Đợi response bắt đầu (tối đa từ config)
   const startWaitTime = Date.now();
   let responseStarted = false;
   
@@ -315,10 +315,10 @@ export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
   }
 
   if (!responseStarted) {
-    throw new Error(`Timeout: ChatGPT khÃ´ng pháº£n há»“i sau ${STREAM_START_TIMEOUT}ms`);
+    throw new Error(`Timeout: ChatGPT không phản hồi sau ${STREAM_START_TIMEOUT}ms`);
   }
 
-  // Stream response vá»›i no-change detection
+  // Stream response với no-change detection
   const streamStartTime = Date.now();
   let lastText = '';
   let noChangeCount = 0;
@@ -327,9 +327,9 @@ export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
     const currentText = await readLatestAssistant();
     const generating = await isGenerating();
 
-    // Kiá»ƒm tra text cÃ³ thay Ä‘á»•i khÃ´ng
+    // Kiểm tra text có thay đổi không
     if (currentText && currentText !== lastText) {
-      // Text thay Ä‘á»•i - reset counter vÃ  gá»­i delta
+      // Text thay đổi - reset counter và gửi delta
       noChangeCount = 0;
       const delta = currentText.slice(lastText.length);
       if (delta && onDelta) {
@@ -337,25 +337,25 @@ export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
       }
       lastText = currentText;
     } else if (currentText) {
-      // Text khÃ´ng Ä‘á»•i - tÄƒng counter
+      // Text không đổi - tăng counter
       noChangeCount++;
     }
 
-    // Debug log má»—i 5 láº§n check
+    // Debug log mỗi 5 lần check
     if (noChangeCount % 5 === 0 && noChangeCount > 0) {
-      console.log(`[Worker] Äang Ä‘á»£i: generating=${generating}, noChangeCount=${noChangeCount}, textLength=${lastText?.length || 0}`);
+      console.log(`[Worker] Đang đợi: generating=${generating}, noChangeCount=${noChangeCount}, textLength=${lastText?.length || 0}`);
     }
 
-    // Äiá»u kiá»‡n dá»«ng:
-    // 1. KhÃ´ng Ä‘ang generate VÃ€ text á»•n Ä‘á»‹nh (theo config) VÃ€ cÃ³ text
-    // 2. HOáº¶C text á»•n Ä‘á»‹nh quÃ¡ lÃ¢u (fallback threshold) dÃ¹ generating=true
+    // Điều kiện dừng:
+    // 1. Không đang generate VÀ text ổn định (theo config) VÀ có text
+    // 2. HOẶC text ổn định quá lâu (fallback threshold) dù generating=true
     if ((!generating && noChangeCount >= STREAM_NO_CHANGE_THRESHOLD && lastText) || 
         (noChangeCount >= STREAM_FALLBACK_THRESHOLD && lastText)) {
       if (noChangeCount >= STREAM_FALLBACK_THRESHOLD) {
         const fallbackSeconds = (STREAM_FALLBACK_THRESHOLD * STREAM_CHECK_INTERVAL / 1000).toFixed(1);
-        console.log(`[Worker] Stream hoÃ n táº¥t: text á»•n Ä‘á»‹nh quÃ¡ lÃ¢u (${fallbackSeconds}s), bá» qua generating flag`);
+        console.log(`[Worker] Stream hoàn tất: text ổn định quá lâu (${fallbackSeconds}s), bỏ qua generating flag`);
       } else {
-        console.log('[Worker] Stream hoÃ n táº¥t: khÃ´ng cÃ²n generate vÃ  text á»•n Ä‘á»‹nh');
+        console.log('[Worker] Stream hoàn tất: không còn generate và text ổn định');
       }
       break;
     }
@@ -396,12 +396,12 @@ export async function startNewTemporaryChat() {
   try {
     await page.goto(CHAT_URL, { waitUntil: 'networkidle2', timeout: 30000 });
   } catch (e) {
-    console.error('[Worker] Lá»—i reset chat:', e.message);
+    console.error('[Worker] Lỗi reset chat:', e.message);
   }
 }
 
 // ============================================
-// PHáº¦N 3c: EXPORTS & INIT
+// PHẦN 3c: EXPORTS & INIT
 // ============================================
 
 export function getPage() { return page; }
@@ -410,19 +410,19 @@ export function getBrowser() { return browser; }
 // Test runner
 if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
   (async () => {
-    console.log('[Worker] Test khá»Ÿi Ä‘á»™ng browser...');
+    console.log('[Worker] Test khởi động browser...');
     try {
       await launchBrowser();
-      console.log('[Worker] Browser Ä‘Ã£ khá»Ÿi Ä‘á»™ng thÃ nh cÃ´ng');
+      console.log('[Worker] Browser đã khởi động thành công');
 
-      // Test gá»­i message
-      const response = await sendPromptAndWaitResponse('Xin chÃ o, báº¡n lÃ  ai?');
+      // Test gửi message
+      const response = await sendPromptAndWaitResponse('Xin chào, bạn là ai?');
       console.log('[Worker] Response:', response?.slice(0, 200));
 
       await closeBrowser();
-      console.log('[Worker] Test hoÃ n táº¥t');
+      console.log('[Worker] Test hoàn tất');
     } catch (err) {
-      console.error('[Worker] Lá»—i:', err);
+      console.error('[Worker] Lỗi:', err);
       process.exit(1);
     }
   })();

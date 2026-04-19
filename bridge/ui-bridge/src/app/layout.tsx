@@ -16,7 +16,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi">
-      <body className={inter.className}>{children}</body>
+      <body className={`${inter.className} admin-shell text-slate-900`}>{children}</body>
     </html>
   )
 }
