@@ -1,493 +1,379 @@
-﻿'use client';
+'use client';
+import './admin.css';
+import { useState, useEffect, useCallback } from 'react';
 
-import { useState, useEffect } from 'react';
-
+/* ── Types ── */
 interface Rule {
-  id: string;
-  name: string;
+  id: string; name: string;
   type: 'system' | 'context' | 'instruction';
-  content: string;
-  priority: number;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
+  content: string; priority: number;
+  active: boolean; createdAt: string; updatedAt: string;
 }
+type ConnStatus = 'checking' | 'connected' | 'disconnected';
+type KeyStatus  = 'idle' | 'checking' | 'valid' | 'invalid';
+type MutState   = 'idle' | 'saving' | 'deleting' | 'toggling';
 
-interface Settings {
-  apiUrl: string;
-  bridgeApiKey: string;
-}
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
 
+const TYPE_META = {
+  system:      { label: 'Vai trò',    color: 'a-badge-brand'   },
+  context:     { label: 'Kiến thức',  color: 'a-badge-success' },
+  instruction: { label: 'Hướng dẫn', color: 'a-badge-warn'    },
+};
+
+/* ── Spinner SVG ── */
+const Spin = () => (
+  <svg className="a-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+    <circle cx="12" cy="12" r="10" strokeOpacity=".25"/>
+    <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+  </svg>
+);
+
+/* ── Main ── */
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'rules' | 'settings'>('settings');
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [editingRule, setEditingRule] = useState<Rule | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
-  const [keyStatus, setKeyStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
-  
-  const [settings, setSettings] = useState<Settings>({
-    apiUrl: '',
-    bridgeApiKey: ''
-  });
+  const [tab, setTab]                   = useState<'settings' | 'rules'>('settings');
+  const [rules, setRules]               = useState<Rule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [rulesError, setRulesError]     = useState<string | null>(null);
+  const [conn, setConn]                 = useState<ConnStatus>('checking');
+  const [keyStatus, setKeyStatus]       = useState<KeyStatus>('idle');
+  const [apiUrl, setApiUrl]             = useState(API_URL);
+  const [apiKey, setApiKey]             = useState('');
+  const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [editingRule, setEditingRule]   = useState<Rule | null>(null);
+  const [mutState, setMutState]         = useState<MutState>('idle');
+  const [mutError, setMutError]         = useState<string | null>(null);
+  const [mutSuccess, setMutSuccess]     = useState<string | null>(null);
+  const [form, setForm] = useState({ name: '', type: 'instruction' as Rule['type'], content: '', priority: 5, active: true });
 
-  // Load settings + BRIDGE_API_KEY từ localStorage
+  /* Load from localStorage */
   useEffect(() => {
-    const saved = localStorage.getItem('admin-settings');
-    const defaults = {
-      apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888',
-      bridgeApiKey: localStorage.getItem('pccc_bridge_api_key') || ''
-    };
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      const merged = { ...defaults, ...parsed, bridgeApiKey: localStorage.getItem('pccc_bridge_api_key') || parsed.bridgeApiKey || '' };
-      setSettings(merged);
-      checkConnection(merged.apiUrl);
-    } else {
-      setSettings(defaults);
-      checkConnection(defaults.apiUrl);
-    }
+    const url = localStorage.getItem('pccc_api_url') || API_URL;
+    const key = localStorage.getItem('pccc_bridge_api_key') || '';
+    setApiUrl(url); setApiKey(key);
+    checkConn(url);
   }, []);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'instruction' as Rule['type'],
-    content: '',
-    priority: 5,
-    active: true
-  });
-
-  // Load bridge settings from API when connected
-  useEffect(() => {
-    if (connectionStatus === 'connected' && settings.apiUrl) {
-      fetchBridgeSettings();
-    }
-  }, [connectionStatus]);
-
-  const fetchBridgeSettings = async () => {
-    try {
-      const res = await fetch(`${settings.apiUrl}/api/settings`, {
-        headers: getHeaders()
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSettings(prev => ({
-          ...prev,
-              bridgeApiKey: prev.bridgeApiKey
-        }));
-      }
-    } catch (err) {
-      console.error('Failed to fetch bridge settings:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (settings.apiUrl) {
-      fetchRules();
-    }
-  }, [settings.apiUrl]);
-
-  const checkConnection = async (apiUrl: string) => {
-    try {
-      const res = await fetch(`${apiUrl}/health`);
-      setConnectionStatus(res.ok ? 'connected' : 'disconnected');
-    } catch {
-      setConnectionStatus('disconnected');
-    }
-  };
-
-  const saveSettings = async () => {
-    localStorage.setItem('admin-settings', JSON.stringify(settings));
-    // Lưu key vào localStorage cho chat page
-    if (settings.bridgeApiKey) localStorage.setItem('pccc_bridge_api_key', settings.bridgeApiKey);
-    else localStorage.removeItem('pccc_bridge_api_key');
-    // Lưu key vào .env qua be-main (không cần restart)
-    if (settings.bridgeApiKey && settings.apiUrl) {
-      try {
-        await fetch(`${settings.apiUrl}/api/settings/bridge-key`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: settings.bridgeApiKey })
-        });
-      } catch { /* ignore - localStorage đã lưu */ }
-    }
-    checkConnection(settings.apiUrl);
-    if (settings.apiUrl) fetchRules();
-
-    // Validate key
-    if (settings.bridgeApiKey) {
-      setKeyStatus('checking');
-      try {
-        const res = await fetch(`${settings.apiUrl}/api/settings/bridge-status`, {
-          headers: { 'Content-Type': 'application/json', 'X-Bridge-API-Key': settings.bridgeApiKey }
-        });
-        const data = await res.json().catch(() => ({})) as { connected?: boolean };
-        setKeyStatus(data.connected ? 'valid' : 'invalid');
-      } catch {
-        setKeyStatus('invalid');
-      }
-    } else {
-      setKeyStatus('idle');
-    }
-  };
-
-  const getHeaders = () => {
+  const headers = useCallback(() => {
     const h: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (settings.bridgeApiKey) h['X-Bridge-API-Key'] = settings.bridgeApiKey;
+    if (apiKey) h['X-Bridge-API-Key'] = apiKey;
     return h;
+  }, [apiKey]);
+
+  const checkConn = async (url: string) => {
+    setConn('checking');
+    try {
+      const r = await fetch(`${url}/health`);
+      setConn(r.ok ? 'connected' : 'disconnected');
+    } catch { setConn('disconnected'); }
   };
 
-  const fetchRules = async () => {
+  const fetchRules = useCallback(async () => {
+    if (!apiUrl) return;
+    setRulesLoading(true); setRulesError(null);
     try {
-      const res = await fetch(`${settings.apiUrl}/api/rules`, {
-        headers: getHeaders()
-      });
-      const data = await res.json();
-      setRules(data.rules || []);
-    } catch (err) {
-      console.error('Failed to fetch rules:', err);
-    } finally {
-      setLoading(false);
-    }
+      const r = await fetch(`${apiUrl}/api/rules`, { headers: headers() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const d = await r.json();
+      setRules(d.rules || []);
+    } catch (e) {
+      setRulesError(e instanceof Error ? e.message : 'Không tải được danh sách rules');
+    } finally { setRulesLoading(false); }
+  }, [apiUrl, headers]);
+
+  useEffect(() => { if (conn === 'connected') fetchRules(); }, [conn]);
+
+  /* ── Settings save ── */
+  const saveSettings = async () => {
+    setSavingSettings(true); setSettingsError(null); setSettingsSaved(false);
+    try {
+      localStorage.setItem('pccc_api_url', apiUrl);
+      if (apiKey) localStorage.setItem('pccc_bridge_api_key', apiKey);
+      else localStorage.removeItem('pccc_bridge_api_key');
+
+      // Validate key
+      if (apiKey) {
+        setKeyStatus('checking');
+        const r = await fetch(`${apiUrl}/api/settings/bridge-status`, {
+          headers: { 'Content-Type': 'application/json', 'X-Bridge-API-Key': apiKey }
+        });
+        const d = await r.json().catch(() => ({})) as { connected?: boolean };
+        setKeyStatus(d.connected ? 'valid' : 'invalid');
+        if (!d.connected) { setSettingsError('API Key không hợp lệ hoặc máy chủ AI chưa sẵn sàng.'); setSavingSettings(false); return; }
+      }
+
+      // Persist key to server
+      if (apiKey) {
+        await fetch(`${apiUrl}/api/settings/bridge-key`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: apiKey })
+        }).catch(() => {});
+      }
+
+      setSettingsSaved(true);
+      setTimeout(() => setSettingsSaved(false), 3000);
+      checkConn(apiUrl);
+    } catch (e) {
+      setSettingsError(e instanceof Error ? e.message : 'Lưu thất bại');
+    } finally { setSavingSettings(false); }
   };
+
+  /* ── Rule mutations ── */
+  const flash = (msg: string) => { setMutSuccess(msg); setTimeout(() => setMutSuccess(null), 3000); };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setMutState('saving'); setMutError(null);
     try {
-      const url = editingRule 
-        ? `${settings.apiUrl}/api/rules/${editingRule.id}`
-        : `${settings.apiUrl}/api/rules`;
-      
-      const res = await fetch(url, {
-        method: editingRule ? 'PUT' : 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify(formData)
-      });
-
-      if (res.ok) {
-        fetchRules();
-        resetForm();
-      }
-    } catch (err) {
-      console.error('Failed to save rule:', err);
-    }
-  };
-
-  const handleEdit = (rule: Rule) => {
-    setEditingRule(rule);
-    setFormData({
-      name: rule.name,
-      type: rule.type,
-      content: rule.content,
-      priority: rule.priority,
-      active: rule.active
-    });
+      const url = editingRule ? `${apiUrl}/api/rules/${editingRule.id}` : `${apiUrl}/api/rules`;
+      const r = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: headers(), body: JSON.stringify(form) });
+      if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error((d as {error?:string}).error || `HTTP ${r.status}`); }
+      flash(editingRule ? 'Đã cập nhật rule.' : 'Đã thêm rule mới.');
+      resetForm(); fetchRules();
+    } catch (e) { setMutError(e instanceof Error ? e.message : 'Lưu thất bại'); }
+    finally { setMutState('idle'); }
   };
 
   const handleDelete = async (id: string) => {
     if (!confirm('Xóa rule này?')) return;
-    
+    setMutState('deleting'); setMutError(null);
     try {
-      await fetch(`${settings.apiUrl}/api/rules/${id}`, { 
-        method: 'DELETE',
-        headers: getHeaders()
-      });
-      fetchRules();
-    } catch (err) {
-      console.error('Failed to delete rule:', err);
-    }
+      const r = await fetch(`${apiUrl}/api/rules/${id}`, { method: 'DELETE', headers: headers() });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      flash('Đã xóa rule.'); fetchRules();
+    } catch (e) { setMutError(e instanceof Error ? e.message : 'Xóa thất bại'); }
+    finally { setMutState('idle'); }
   };
 
-  const handleToggleActive = async (rule: Rule) => {
+  const handleToggle = async (rule: Rule) => {
+    setMutState('toggling'); setMutError(null);
     try {
-      await fetch(`${settings.apiUrl}/api/rules/${rule.id}`, {
-        method: 'PUT',
-        headers: getHeaders(),
-        body: JSON.stringify({ active: !rule.active })
-      });
+      const r = await fetch(`${apiUrl}/api/rules/${rule.id}`, { method: 'PUT', headers: headers(), body: JSON.stringify({ active: !rule.active }) });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       fetchRules();
-    } catch (err) {
-      console.error('Failed to toggle rule:', err);
-    }
+    } catch (e) { setMutError(e instanceof Error ? e.message : 'Cập nhật thất bại'); }
+    finally { setMutState('idle'); }
   };
 
-  const resetForm = () => {
-    setEditingRule(null);
-    setFormData({ name: '', type: 'instruction', content: '', priority: 5, active: true });
-  };
+  const resetForm = () => { setEditingRule(null); setForm({ name: '', type: 'instruction', content: '', priority: 5, active: true }); };
+  const startEdit = (r: Rule) => { setEditingRule(r); setForm({ name: r.name, type: r.type, content: r.content, priority: r.priority, active: r.active }); };
 
-  const getTypeLabel = (type: string) => {
-    switch (type) {
-      case 'system': return '🔵 System';
-      case 'context': return '🟢 Context';
-      case 'instruction': return '🟡 Instruction';
-      default: return type;
-    }
-  };
-
-  const getStatusBadge = () => {
-    switch (connectionStatus) {
-      case 'checking':
-        return <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-sm">Đang kiểm tra...</span>;
-      case 'connected':
-        return <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">✓ Đã kết nối</span>;
-      case 'disconnected':
-        return <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">✗ Mất kết nối</span>;
-    }
-  };
-
-  if (loading && !settings.apiUrl) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Đang tải...</div>
-      </div>
-    );
-  }
-
+  /* ── Render ── */
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">🔧 Admin Dashboard</h1>
-          <div className="flex items-center gap-4">
-            {getStatusBadge()}
-            <a href="/" className="text-red-600 hover:underline">← Về trang chat</a>
-          </div>
+    <div className="a-shell">
+      {/* Top bar */}
+      <header className="a-topbar">
+        <a href="/" className="a-topbar-brand">
+          <span className="a-topbar-icon">🔥</span>
+          PCCC Admin
+        </a>
+        <div className="flex items-center gap-3">
+          <span className={`a-status a-status--${conn}`}>
+            <span className="a-status-dot" />
+            {conn === 'checking' ? 'Đang kiểm tra…' : conn === 'connected' ? 'Đã kết nối' : 'Mất kết nối'}
+          </span>
+          <a href="/" className="a-btn a-btn-ghost" style={{fontSize:12}}>← Về chat</a>
         </div>
+      </header>
 
+      <main className="a-main">
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              activeTab === 'settings' 
-                ? 'bg-red-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            ⚙️ Cài đặt
-          </button>
-          <button
-            onClick={() => setActiveTab('rules')}
-            className={`px-4 py-2 rounded-lg font-medium ${
-              activeTab === 'rules' 
-                ? 'bg-red-600 text-white' 
-                : 'bg-white text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            📋 Rules ({rules.length})
-          </button>
-        </div>
+        <nav className="a-tabs">
+          {(['settings', 'rules'] as const).map(t => (
+            <button key={t} className="a-tab" data-active={tab === t} onClick={() => setTab(t)}>
+              {t === 'settings' ? '⚙️ Cài đặt' : `📋 Rules${rules.length ? ` (${rules.length})` : ''}`}
+            </button>
+          ))}
+        </nav>
 
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">⚙️ Cài đặt hệ thống</h2>
-            
-            <div className="space-y-4">
+        {/* ── Settings Tab ── */}
+        {tab === 'settings' && (
+          <div className="a-card" style={{padding: 24, maxWidth: 520}}>
+            <p className="a-section-title">Cài đặt hệ thống</p>
+
+            <div style={{display:'flex', flexDirection:'column', gap:16}}>
               <div>
-                <label className="block text-sm font-medium mb-1">URL máy chủ</label>
-                <input
-                  type="text"
-                  value={settings.apiUrl}
-                  onChange={e => setSettings({ ...settings, apiUrl: e.target.value })}
-                  placeholder={process.env.NEXT_PUBLIC_API_URL || "http://localhost:6969"}
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-                />
+                <label className="a-label">URL máy chủ</label>
+                <input className="a-input" value={apiUrl} onChange={e => setApiUrl(e.target.value)} placeholder="http://localhost:8888" />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">
-                  API Key <span className="text-red-600">*</span>
-                  {keyStatus === 'checking' && <span className="ml-2 text-xs text-gray-500">Đang kiểm tra…</span>}
-                  {keyStatus === 'valid'    && <span className="ml-2 text-xs text-green-600">✓ Hợp lệ</span>}
-                  {keyStatus === 'invalid'  && <span className="ml-2 text-xs text-red-600">✗ Không hợp lệ</span>}
+                <label className="a-label">
+                  API Key
+                  {keyStatus === 'checking' && <span style={{marginLeft:8, fontSize:11, color:'var(--a-text-4)', fontWeight:400}}>Đang kiểm tra…</span>}
+                  {keyStatus === 'valid'    && <span style={{marginLeft:8, fontSize:11, color:'var(--a-success)', fontWeight:400}}>✓ Hợp lệ</span>}
+                  {keyStatus === 'invalid'  && <span style={{marginLeft:8, fontSize:11, color:'var(--a-danger)', fontWeight:400}}>✗ Không hợp lệ</span>}
                 </label>
                 <input
+                  className="a-input"
                   type="password"
                   autoComplete="new-password"
-                  value={settings.bridgeApiKey}
-                  onChange={e => { setSettings({ ...settings, bridgeApiKey: e.target.value }); setKeyStatus('idle'); }}
+                  value={apiKey}
+                  data-success={keyStatus === 'valid'}
+                  data-error={keyStatus === 'invalid'}
+                  onChange={e => { setApiKey(e.target.value); setKeyStatus('idle'); }}
                   placeholder="Nhập API Key để kích hoạt chatbot"
-                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 ${
-                    keyStatus === 'valid' ? 'border-green-400' : keyStatus === 'invalid' ? 'border-red-400' : ''
-                  }`}
                 />
+                <p style={{fontSize:11, color:'var(--a-text-4)', marginTop:4}}>
+                  {apiKey ? '••••••••' : 'Chưa cấu hình'} · Lấy key từ Bridge Admin Dashboard
+                </p>
               </div>
 
-              <div className="pt-4 border-t">
-                <h3 className="font-medium mb-3">Trạng thái</h3>
-                <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-                  <p><span className="font-medium">API Key:</span> {settings.bridgeApiKey ? '••••••••' : 'Không cấu hình'}</p>
+              {settingsError && (
+                <div className="a-alert a-alert-error">
+                  <span>⚠</span><span>{settingsError}</span>
                 </div>
-              </div>
+              )}
+              {settingsSaved && (
+                <div className="a-alert a-alert-success">
+                  <span>✓</span><span>Đã lưu cài đặt thành công.</span>
+                </div>
+              )}
 
-              <button
-                onClick={saveSettings}
-                className="w-full bg-red-600 text-white py-2 rounded-lg hover:bg-red-700"
-              >
-                💾 Lưu cài đặt
+              <button className="a-btn a-btn-primary" onClick={saveSettings} disabled={savingSettings} style={{width:'100%', padding:'10px 16px'}}>
+                {savingSettings ? <><Spin /> Đang lưu…</> : '💾 Lưu cài đặt'}
               </button>
             </div>
           </div>
         )}
 
-        {/* Rules Tab */}
-        {activeTab === 'rules' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* ── Rules Tab ── */}
+        {tab === 'rules' && (
+          <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, alignItems:'start'}}>
+
             {/* Form */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">
-                {editingRule ? '✏️ Sửa Rule' : '➕ Thêm Rule mới'}
-              </h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="a-card" style={{padding:20}}>
+              <p className="a-section-title">{editingRule ? 'Chỉnh sửa Rule' : 'Thêm Rule mới'}</p>
+
+              {mutError && <div className="a-alert a-alert-error" style={{marginBottom:12}}><span>⚠</span><span>{mutError}</span></div>}
+              {mutSuccess && <div className="a-alert a-alert-success" style={{marginBottom:12}}><span>✓</span><span>{mutSuccess}</span></div>}
+
+              <form onSubmit={handleSubmit} style={{display:'flex', flexDirection:'column', gap:14}}>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Tên Rule</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
-                    required
-                  />
+                  <label className="a-label">Tên Rule <span style={{color:'var(--a-danger)'}}>*</span></label>
+                  <input className="a-input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required placeholder="VD: Vai trò chuyên gia PCCC" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Loại</label>
-                  <select
-                    value={formData.type}
-                    onChange={e => setFormData({ ...formData, type: e.target.value as Rule['type'] })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  >
-                    <option value="system">System - Vai trò</option>
-                    <option value="context">Context - Kiến thức</option>
-                    <option value="instruction">Instruction - Hướng dẫn</option>
+                  <label className="a-label">Loại</label>
+                  <select className="a-input" value={form.type} onChange={e => setForm({...form, type: e.target.value as Rule['type']})}>
+                    <option value="system">Vai trò (System)</option>
+                    <option value="context">Kiến thức (Context)</option>
+                    <option value="instruction">Hướng dẫn (Instruction)</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Nội dung</label>
-                  <textarea
-                    value={formData.content}
-                    onChange={e => setFormData({ ...formData, content: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg h-32 focus:ring-2 focus:ring-red-500"
-                    required
-                  />
+                  <label className="a-label">Nội dung <span style={{color:'var(--a-danger)'}}>*</span></label>
+                  <textarea className="a-input" style={{minHeight:110, resize:'vertical'}} value={form.content} onChange={e => setForm({...form, content: e.target.value})} required placeholder="Nhập nội dung rule…" />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Độ ưu tiên (1-10, nhỏ hơn = cao hơn)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="10"
-                    value={formData.priority}
-                    onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
+                  <label className="a-label">Độ ưu tiên <span style={{color:'var(--a-text-4)', fontWeight:400, textTransform:'none', letterSpacing:0}}>(1 = cao nhất)</span></label>
+                  <input className="a-input" type="number" min={1} max={10} value={form.priority} onChange={e => setForm({...form, priority: +e.target.value})} />
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="active"
-                    checked={formData.active}
-                    onChange={e => setFormData({ ...formData, active: e.target.checked })}
-                    className="w-4 h-4"
-                  />
-                  <label htmlFor="active" className="text-sm">Kích hoạt</label>
-                </div>
+                <label style={{display:'flex', alignItems:'center', gap:8, cursor:'pointer', userSelect:'none'}}>
+                  <input type="checkbox" checked={form.active} onChange={e => setForm({...form, active: e.target.checked})} style={{width:15, height:15, accentColor:'var(--a-brand)'}} />
+                  <span style={{fontSize:13, color:'var(--a-text-2)'}}>Kích hoạt ngay</span>
+                </label>
 
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-red-600 text-white py-2 rounded-lg hover:bg-red-700"
-                  >
-                    {editingRule ? 'Cập nhật' : 'Thêm mới'}
+                <div style={{display:'flex', gap:8}}>
+                  <button type="submit" className="a-btn a-btn-primary" disabled={mutState === 'saving'} style={{flex:1}}>
+                    {mutState === 'saving' ? <><Spin />{editingRule ? 'Đang lưu…' : 'Đang thêm…'}</> : editingRule ? 'Cập nhật' : 'Thêm mới'}
                   </button>
                   {editingRule && (
-                    <button
-                      type="button"
-                      onClick={resetForm}
-                      className="px-4 py-2 border rounded-lg hover:bg-gray-100"
-                    >
-                      Hủy
-                    </button>
+                    <button type="button" className="a-btn a-btn-secondary" onClick={resetForm}>Hủy</button>
                   )}
                 </div>
               </form>
             </div>
 
             {/* List */}
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <h2 className="text-xl font-semibold mb-4">📋 Danh sách Rules ({rules.length})</h2>
-              
-              <div className="space-y-3">
-                {rules.map(rule => (
-                  <div
-                    key={rule.id}
-                    className={`p-4 rounded-lg border ${rule.active ? 'bg-white' : 'bg-gray-100 opacity-60'}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium">{rule.name}</span>
-                          <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">
-                            {getTypeLabel(rule.type)}
-                          </span>
-                          <span className="text-xs text-gray-500">P{rule.priority}</span>
+            <div className="a-card" style={{padding:20}}>
+              <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16}}>
+                <p className="a-section-title" style={{marginBottom:0}}>Danh sách Rules</p>
+                <button className="a-btn a-btn-ghost" onClick={fetchRules} disabled={rulesLoading} style={{fontSize:12, padding:'4px 10px'}}>
+                  {rulesLoading ? <Spin /> : '↻'} Làm mới
+                </button>
+              </div>
+
+              {/* Loading */}
+              {rulesLoading && (
+                <div style={{display:'flex', flexDirection:'column', gap:10}}>
+                  {[1,2,3].map(i => <div key={i} className="a-skeleton" style={{height:72}} />)}
+                </div>
+              )}
+
+              {/* Error */}
+              {!rulesLoading && rulesError && (
+                <div className="a-alert a-alert-error">
+                  <span>⚠</span>
+                  <div>
+                    <p style={{fontWeight:600}}>Không tải được rules</p>
+                    <p style={{marginTop:2}}>{rulesError}</p>
+                    <button className="a-btn a-btn-secondary" onClick={fetchRules} style={{marginTop:8, fontSize:12}}>Thử lại</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Empty */}
+              {!rulesLoading && !rulesError && rules.length === 0 && (
+                <div className="a-empty">
+                  <span style={{fontSize:32, marginBottom:8}}>📋</span>
+                  <p style={{fontWeight:600, color:'var(--a-text-2)'}}>Chưa có rule nào</p>
+                  <p style={{fontSize:12, color:'var(--a-text-3)', marginTop:4}}>Thêm rule đầu tiên ở form bên trái.</p>
+                </div>
+              )}
+
+              {/* List */}
+              {!rulesLoading && !rulesError && rules.length > 0 && (
+                <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                  {rules.map(rule => (
+                    <div key={rule.id} className="a-rule-row" data-inactive={!rule.active}>
+                      <div style={{display:'flex', alignItems:'flex-start', justifyContent:'space-between', gap:8}}>
+                        <div style={{flex:1, minWidth:0}}>
+                          <div style={{display:'flex', alignItems:'center', gap:6, flexWrap:'wrap', marginBottom:4}}>
+                            <span style={{fontWeight:600, fontSize:13, color:'var(--a-text)'}}>{rule.name}</span>
+                            <span className={`a-badge ${TYPE_META[rule.type].color}`}>{TYPE_META[rule.type].label}</span>
+                            <span style={{fontSize:11, color:'var(--a-text-4)'}}>P{rule.priority}</span>
+                          </div>
+                          <p style={{fontSize:12, color:'var(--a-text-3)', overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical'}}>
+                            {rule.content}
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-600 line-clamp-2">{rule.content}</p>
+                      </div>
+                      <div style={{display:'flex', gap:6, marginTop:10, paddingTop:10, borderTop:'1px solid var(--a-border)'}}>
+                        <button
+                          className={`a-btn ${rule.active ? 'a-btn-secondary' : 'a-btn-ghost'}`}
+                          style={{fontSize:11, padding:'3px 10px'}}
+                          onClick={() => handleToggle(rule)}
+                          disabled={mutState === 'toggling'}
+                        >
+                          {mutState === 'toggling' ? <Spin /> : rule.active ? '● Active' : '○ Inactive'}
+                        </button>
+                        <button className="a-btn a-btn-secondary" style={{fontSize:11, padding:'3px 10px'}} onClick={() => startEdit(rule)}>
+                          ✏ Sửa
+                        </button>
+                        <button
+                          className="a-btn a-btn-danger"
+                          style={{fontSize:11, padding:'3px 10px', marginLeft:'auto'}}
+                          onClick={() => handleDelete(rule.id)}
+                          disabled={mutState === 'deleting'}
+                        >
+                          {mutState === 'deleting' ? <Spin /> : '🗑'}
+                        </button>
                       </div>
                     </div>
-                    
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t">
-                      <button
-                        onClick={() => handleToggleActive(rule)}
-                        className={`px-3 py-1 text-xs rounded-full ${
-                          rule.active 
-                            ? 'bg-green-100 text-green-700' 
-                            : 'bg-gray-200 text-gray-600'
-                        }`}
-                      >
-                        {rule.active ? '✓ Active' : 'Inactive'}
-                      </button>
-                      <button
-                        onClick={() => handleEdit(rule)}
-                        className="px-3 py-1 text-xs bg-blue-100 text-blue-700 rounded-full"
-                      >
-                        ✏️ Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDelete(rule.id)}
-                        className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded-full"
-                      >
-                        🗑️ Xóa
-                      </button>
-                    </div>
-                  </div>
-                ))}
-
-                {rules.length === 0 && (
-                  <p className="text-center text-gray-500 py-8">Chưa có rule nào</p>
-                )}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-

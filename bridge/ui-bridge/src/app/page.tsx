@@ -221,7 +221,11 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
     setAddingWorker(true); setError(null);
     try {
       const res = await fetch(`${BRIDGE_API_URL}/admin/workers`, { method: 'POST', headers: headers(), body: JSON.stringify({ count: 1 }) });
-      if (res.ok) { flash('Đã thêm slot worker.'); void fetchData(false); }
+      if (res.ok) {
+        const d = await res.json().catch(() => ({})) as { warning?: string };
+        flash(d.warning ? `Đã thêm slot worker. ⚠ ${d.warning}` : 'Đã thêm slot worker.');
+        void fetchData(false);
+      }
       else { const e = await res.json().catch(() => ({})); setError((e as {error?:string}).error || `Thêm worker thất bại (${res.status})`); }
     } catch { setError('Không thể thêm worker (lỗi mạng).'); }
     finally { setAddingWorker(false); }

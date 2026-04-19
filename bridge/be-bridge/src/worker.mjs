@@ -100,35 +100,23 @@ export async function closeBrowser() {
 
 
 export async function showBrowserWindow() {
-  if (!browser) return;
-  try {
-    const pages = await browser.pages();
-    if (pages.length > 0) {
-      const cdp = await pages[0].createCDPSession();
-      await cdp.send('Browser.setWindowBounds', {
-        windowId: 1,
-        bounds: { windowState: 'normal', left: 100, top: 100, width: 1200, height: 800 }
-      });
-    }
-  } catch (e) {
-    console.error('[showBrowserWindow] Error:', e.message);
-  }
+  if (!browser) throw new Error('Browser chua khoi dong');
+  const pages = await browser.pages();
+  if (!pages.length) throw new Error('Khong co trang nao dang mo');
+  const cdp = await pages[0].createCDPSession();
+  const { windowId } = await cdp.send('Browser.getWindowForTarget');
+  await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'normal', left: 100, top: 100, width: 1200, height: 800 } });
+  await cdp.detach();
 }
 
 export async function hideBrowserWindow() {
-  if (!browser) return;
-  try {
-    const pages = await browser.pages();
-    if (pages.length > 0) {
-      const cdp = await pages[0].createCDPSession();
-      await cdp.send('Browser.setWindowBounds', {
-        windowId: 1,
-        bounds: { windowState: 'minimized' }
-      });
-    }
-  } catch (e) {
-    console.error('[hideBrowserWindow] Error:', e.message);
-  }
+  if (!browser) throw new Error('Browser chua khoi dong');
+  const pages = await browser.pages();
+  if (!pages.length) throw new Error('Khong co trang nao dang mo');
+  const cdp = await pages[0].createCDPSession();
+  const { windowId } = await cdp.send('Browser.getWindowForTarget');
+  await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+  await cdp.detach();
 }
 
 export function isBrowserRunning() {

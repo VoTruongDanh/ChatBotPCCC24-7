@@ -33,22 +33,26 @@ function SectionHead({ icon, title }: { icon: React.ReactNode; title: string }) 
 
 export default function TabConfig({ config, configForm, saving, onFormChange, onSave, onRefresh }: Props) {
   const [dirty, setDirty] = useState(false);
+  const prevSaving    = useRef(false);
   const isFirstRender = useRef(true);
 
-  // Track dirty state — bỏ qua lần đầu khi config load vào form
+  // Track dirty — bỏ qua lần đầu khi config load vào form
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
+    // Không set dirty khi đang save (configForm thay đổi do server trả về)
+    if (prevSaving.current) return;
     setDirty(true);
   }, [configForm]);
 
-  // Reset dirty sau khi save thành công hoặc refresh
+  // Reset dirty khi save hoàn thành (saving: true → false)
   useEffect(() => {
-    if (!saving) setDirty(false);
-  }, [config]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (prevSaving.current && !saving) setDirty(false);
+    prevSaving.current = saving;
+  }, [saving]);
 
   const set = (patch: Partial<BridgeConfig>) => onFormChange(patch);
 
-  const handleSave = () => { onSave(); setDirty(false); };
+  const handleSave = () => { onSave(); }; // dirty reset tự động khi saving→false
 
   if (!config) {
     return (
