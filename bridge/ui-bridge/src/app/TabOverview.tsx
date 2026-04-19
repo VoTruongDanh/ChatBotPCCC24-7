@@ -72,7 +72,7 @@ export default function TabOverview({ workers, apiKeys, status, browserRunning, 
           <p className="text-lg font-bold mt-1" style={{color: status?.bridge.authEnabled ? 'var(--c-success)' : 'var(--c-warn)'}}>
             {status ? (status.bridge.authEnabled ? 'Đã bật' : 'Đã tắt') : '—'}
           </p>
-          <p className="text-xs mt-1" style={{color:'var(--c-text-3)'}}>BRIDGE_API_KEY cho be-main</p>
+          <p className="text-xs mt-1" style={{color:'var(--c-text-3)'}}>Dựa trên API keys active</p>
         </div>
 
         <div className="admin-metric">

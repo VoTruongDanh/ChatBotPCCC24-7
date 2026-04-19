@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -392,6 +392,9 @@ export default function ChatPage() {
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const title1 = useScramble('Tư Vấn PCCC', 300);
   const title2 = useScramble('Thông Minh', 900);
@@ -409,6 +412,13 @@ export default function ChatPage() {
     const newTheme = theme === 'light' ? 'dark' : 'light';
     setTheme(newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);
+  };
+
+  const showToastMessage = (message: string, type: 'success' | 'error') => {
+    setToastMessage(message);
+    setToastType(type);
+    setShowToast(true);
+    setTimeout(() => setShowToast(false), 3000);
   };
 
   useEffect(() => {
@@ -438,9 +448,11 @@ export default function ChatPage() {
     setLoading(true);
     setMessages(prev => [...prev, { role: 'assistant', content: '', status: 'streaming', id: msgId }]);
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      
       const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ prompt: savedInput, messages: [...messages, userMsg], sessionId }),
       });
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
@@ -942,6 +954,204 @@ export default function ChatPage() {
           .pccc-hero { padding: 24px 16px; }
           .pccc-btn-ghost { display: none; }
         }
+
+        /* ══════════════════════════════════════════════
+           SETTINGS MODAL
+        ══════════════════════════════════════════════ */
+        .pccc-modal-overlay {
+          position: fixed; inset: 0; z-index: 100;
+          background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+          display: flex; align-items: center; justify-content: center;
+          padding: 24px;
+          animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        
+        .pccc-modal {
+          background: var(--surface); border: 1px solid var(--border2);
+          border-radius: 20px; box-shadow: var(--shadow-lg);
+          width: 100%; max-width: 520px;
+          animation: modalSlide 0.3s cubic-bezier(0.34,1.56,0.64,1);
+        }
+        @keyframes modalSlide { from{opacity:0;transform:translateY(40px) scale(0.95)} to{opacity:1;transform:translateY(0) scale(1)} }
+        
+        .pccc-modal-header {
+          padding: 24px 24px 20px; border-bottom: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .pccc-modal-title {
+          font-size: 19px; font-weight: 800; color: var(--text);
+          letter-spacing: -0.5px;
+        }
+        .pccc-modal-close {
+          width: 32px; height: 32px; border-radius: 8px;
+          background: transparent; border: 1px solid var(--border);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: all 0.2s; color: var(--text2);
+        }
+        .pccc-modal-close:hover {
+          background: var(--border); color: var(--text);
+        }
+        
+        .pccc-modal-body {
+          padding: 24px; display: flex; flex-direction: column; gap: 24px;
+        }
+        
+        .pccc-section {
+          display: flex; flex-direction: column; gap: 10px;
+        }
+        .pccc-label {
+          font-size: 12px; font-weight: 700; color: var(--text2);
+          letter-spacing: 0.5px; text-transform: uppercase;
+        }
+        .pccc-input-group {
+          position: relative; display: flex; align-items: center;
+        }
+        .pccc-input {
+          flex: 1; padding: 12px 44px 12px 14px;
+          background: var(--bg2); border: 1px solid var(--border2);
+          border-radius: 10px; font-size: 14px; font-weight: 500;
+          color: var(--text); font-family: 'Plus Jakarta Sans', monospace;
+          transition: all 0.2s; outline: none;
+        }
+        .pccc-input:focus {
+          border-color: rgba(220,38,38,0.4);
+          box-shadow: 0 0 0 3px rgba(220,38,38,0.1);
+        }
+        .pccc-input:disabled {
+          opacity: 0.5; cursor: not-allowed;
+        }
+        .pccc-input::placeholder {
+          color: var(--text3);
+        }
+        .pccc-toggle-key {
+          position: absolute; right: 8px;
+          width: 32px; height: 32px; border-radius: 6px;
+          background: transparent; border: none;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; color: var(--text3);
+          transition: all 0.2s;
+        }
+        .pccc-toggle-key:hover {
+          background: var(--border); color: var(--text2);
+        }
+        .pccc-helper {
+          font-size: 12px; color: var(--text3); line-height: 1.5;
+        }
+        
+        .pccc-status-card {
+          padding: 14px 16px; border-radius: 12px;
+          display: flex; align-items: center; gap: 12px;
+          border: 1px solid var(--border2);
+        }
+        .pccc-status-card.idle {
+          background: var(--bg2);
+        }
+        .pccc-status-card.testing {
+          background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2);
+        }
+        .pccc-status-card.success {
+          background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2);
+        }
+        .pccc-status-card.error {
+          background: rgba(220,38,38,0.06); border-color: rgba(220,38,38,0.2);
+        }
+        .pccc-status-icon {
+          width: 36px; height: 36px; border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+          flex-shrink: 0;
+        }
+        .pccc-status-card.idle .pccc-status-icon {
+          background: var(--border);
+        }
+        .pccc-status-card.testing .pccc-status-icon {
+          background: rgba(59,130,246,0.15);
+        }
+        .pccc-status-card.success .pccc-status-icon {
+          background: rgba(16,185,129,0.15);
+        }
+        .pccc-status-card.error .pccc-status-icon {
+          background: rgba(220,38,38,0.12);
+        }
+        .pccc-status-text {
+          flex: 1; display: flex; flex-direction: column; gap: 2px;
+        }
+        .pccc-status-label {
+          font-size: 13px; font-weight: 600; color: var(--text);
+        }
+        .pccc-status-desc {
+          font-size: 12px; color: var(--text3);
+        }
+        .pccc-status-card.error .pccc-status-desc {
+          color: var(--r2);
+        }
+        
+        .pccc-modal-footer {
+          padding: 20px 24px 24px; border-top: 1px solid var(--border);
+          display: flex; gap: 10px; justify-content: flex-end;
+        }
+        .pccc-btn {
+          padding: 10px 20px; border-radius: 10px;
+          font-size: 14px; font-weight: 600; font-family: inherit;
+          cursor: pointer; transition: all 0.2s;
+          display: flex; align-items: center; gap: 8px;
+          border: none; outline: none;
+        }
+        .pccc-btn:disabled {
+          opacity: 0.5; cursor: not-allowed;
+        }
+        .pccc-btn-secondary {
+          background: var(--bg2); color: var(--text2);
+          border: 1px solid var(--border2);
+        }
+        .pccc-btn-secondary:hover:not(:disabled) {
+          background: var(--border); color: var(--text);
+        }
+        .pccc-btn-primary-modal {
+          background: linear-gradient(135deg, var(--r), var(--ember));
+          color: #fff; box-shadow: 0 4px 16px rgba(220,38,38,0.3);
+        }
+        .pccc-btn-primary-modal:hover:not(:disabled) {
+          box-shadow: 0 6px 20px rgba(220,38,38,0.45);
+          transform: translateY(-1px);
+        }
+        .pccc-btn-primary-modal:active:not(:disabled) {
+          transform: scale(0.97);
+        }
+        
+        /* ── Toast ── */
+        .pccc-toast {
+          position: fixed; bottom: 24px; right: 24px; z-index: 200;
+          padding: 14px 18px; border-radius: 12px;
+          display: flex; align-items: center; gap: 10px;
+          box-shadow: var(--shadow-lg);
+          animation: toastSlide 0.3s cubic-bezier(0.34,1.56,0.64,1);
+          font-size: 14px; font-weight: 600;
+        }
+        @keyframes toastSlide { from{opacity:0;transform:translateX(100px)} to{opacity:1;transform:translateX(0)} }
+        .pccc-toast.success {
+          background: rgba(16,185,129,0.95); color: #fff;
+          border: 1px solid rgba(255,255,255,0.2);
+        }
+        .pccc-toast.error {
+          background: rgba(220,38,38,0.95); color: #fff;
+          border: 1px solid rgba(255,255,255,0.2);
+        }
+        .pccc-toast-icon {
+          width: 20px; height: 20px; flex-shrink: 0;
+        }
+        
+        /* ── Settings Button in Nav ── */
+        .pccc-btn-settings {
+          width: 36px; height: 36px; border-radius: 8px;
+          background: var(--border); border: 1px solid var(--border2);
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; transition: all 0.2s; color: var(--text2);
+        }
+        .pccc-btn-settings:hover {
+          background: var(--border2); color: var(--text);
+          transform: rotate(45deg);
+        }
       `}</style>
 
       <div className="pccc-page">
@@ -1056,7 +1266,31 @@ export default function ChatPage() {
             </>
           )}
         </div>
+
+        {/* Settings Modal */}
+        {/* Toast Notification */}
+        {showToast && (
+          <div className={`pccc-toast ${toastType}`}>
+            <svg className="pccc-toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {toastType === 'success' ? (
+                <polyline points="20 6 9 17 4 12"/>
+              ) : (
+                <><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></>
+              )}
+            </svg>
+            {toastMessage}
+          </div>
+        )}
       </div>
     </>
   );
 }
+
+
+
+
+
+
+
+
+

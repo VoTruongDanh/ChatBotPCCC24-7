@@ -1,9 +1,9 @@
-'use client';
+﻿'use client';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Server, Eye, EyeOff, Loader2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
-const BRIDGE_API_URL = process.env.NEXT_PUBLIC_BRIDGE_API_URL || 'http://localhost:1122';
+const BRIDGE_API_URL = process.env.NEXT_PUBLIC_BRIDGE_API_URL || 'http://localhost:1110';
 const SESSION_KEY = 'ui-bridge-session-token';
 
 export function saveSession(token: string) {
@@ -84,7 +84,7 @@ export default function LoginPage({ onLogin }: Props) {
             initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, ease: 'easeOut' }}>
             <span className="login-logo-icon"><Server className="h-5 w-5" /></span>
-            <span className="text-white font-bold tracking-tight text-sm">be-bridge</span>
+            <span className="text-white font-bold tracking-tight text-sm">API Chatbot</span>
           </motion.div>
 
           {/* Headline */}
@@ -92,7 +92,7 @@ export default function LoginPage({ onLogin }: Props) {
             <motion.p className="text-4xl font-extrabold text-white leading-tight tracking-tight"
               initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.7, delay: 0.15, ease: 'easeOut' }}>
-              Bridge<br />Admin<br />Console
+              API<br />Chatbot<br />Admin
             </motion.p>
 
             <motion.p className="mt-4 text-sm text-white/55 max-w-xs leading-relaxed"
@@ -135,7 +135,7 @@ export default function LoginPage({ onLogin }: Props) {
                 style={{ background: 'var(--c-accent)' }}>
                 <Server className="h-4 w-4" />
               </span>
-              <span className="text-sm font-bold" style={{ color: 'var(--c-text)' }}>be-bridge Admin</span>
+              <span className="text-sm font-bold" style={{ color: 'var(--c-text)' }}>API Chatbot Admin</span>
             </div>
             <p className="text-2xl font-bold" style={{ color: 'var(--c-text)' }}>Chào mừng trở lại</p>
             <p className="text-sm mt-1" style={{ color: 'var(--c-text-3)' }}>
@@ -168,7 +168,7 @@ export default function LoginPage({ onLogin }: Props) {
                     <input id="username" type="text" autoComplete="username" autoFocus
                       className="admin-input" value={username}
                       onChange={e => { setUsername(e.target.value); setError(null); }}
-                      disabled={loading} placeholder="admin" />
+                      disabled={loading} />
                   </motion.div>
 
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }}>
@@ -178,7 +178,7 @@ export default function LoginPage({ onLogin }: Props) {
                         autoComplete="current-password"
                         className="admin-input flex-1" value={password}
                         onChange={e => { setPassword(e.target.value); setError(null); }}
-                        disabled={loading} placeholder="••••••••" />
+                        disabled={loading} placeholder="" />
                       <button type="button" className="admin-icon-btn shrink-0"
                         style={{ border: '1px solid var(--c-border)' }}
                         onClick={() => setShowPw(v => !v)} tabIndex={-1}>
@@ -226,3 +226,4 @@ export default function LoginPage({ onLogin }: Props) {
     </div>
   );
 }
+

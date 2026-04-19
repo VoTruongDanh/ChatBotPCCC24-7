@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 
@@ -15,8 +15,6 @@ interface Rule {
 
 interface Settings {
   apiUrl: string;
-  apiKey: string;
-  bridgeUrl: string;
   bridgeApiKey: string;
 }
 
@@ -26,14 +24,31 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking');
+  const [keyStatus, setKeyStatus] = useState<'idle' | 'checking' | 'valid' | 'invalid'>('idle');
   
   const [settings, setSettings] = useState<Settings>({
     apiUrl: '',
-    apiKey: '',
-    bridgeUrl: '',
     bridgeApiKey: ''
   });
-  
+
+  // Load settings + BRIDGE_API_KEY từ localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('admin-settings');
+    const defaults = {
+      apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888',
+      bridgeApiKey: localStorage.getItem('pccc_bridge_api_key') || ''
+    };
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const merged = { ...defaults, ...parsed, bridgeApiKey: localStorage.getItem('pccc_bridge_api_key') || parsed.bridgeApiKey || '' };
+      setSettings(merged);
+      checkConnection(merged.apiUrl);
+    } else {
+      setSettings(defaults);
+      checkConnection(defaults.apiUrl);
+    }
+  }, []);
+
   const [formData, setFormData] = useState({
     name: '',
     type: 'instruction' as Rule['type'],
@@ -41,24 +56,6 @@ export default function AdminPage() {
     priority: 5,
     active: true
   });
-
-  useEffect(() => {
-    // Load settings from localStorage
-    const savedSettings = localStorage.getItem('admin-settings');
-    if (savedSettings) {
-      const parsed = JSON.parse(savedSettings);
-      setSettings(parsed);
-      checkConnection(parsed.apiUrl, parsed.apiKey);
-    } else {
-      // Default values
-      setSettings({
-        apiUrl: 'http://localhost:3001',
-        apiKey: '',
-        bridgeUrl: 'http://127.0.0.1:1122',
-        bridgeApiKey: ''
-      });
-    }
-  }, []);
 
   // Load bridge settings from API when connected
   useEffect(() => {
@@ -76,8 +73,7 @@ export default function AdminPage() {
         const data = await res.json();
         setSettings(prev => ({
           ...prev,
-          bridgeUrl: data.bridge?.url || prev.bridgeUrl,
-          bridgeApiKey: data.bridge?.hasApiKey ? 'configured' : ''
+              bridgeApiKey: prev.bridgeApiKey
         }));
       }
     } catch (err) {
@@ -89,39 +85,56 @@ export default function AdminPage() {
     if (settings.apiUrl) {
       fetchRules();
     }
-  }, [settings.apiUrl, settings.apiKey]);
+  }, [settings.apiUrl]);
 
-  const checkConnection = async (apiUrl: string, apiKey: string) => {
+  const checkConnection = async (apiUrl: string) => {
     try {
-      const headers: Record<string, string> = {};
-      if (apiKey) headers['X-Admin-API-Key'] = apiKey;
-      
-      const res = await fetch(`${apiUrl}/health`, { 
-        method: 'GET',
-        headers 
-      });
+      const res = await fetch(`${apiUrl}/health`);
       setConnectionStatus(res.ok ? 'connected' : 'disconnected');
     } catch {
       setConnectionStatus('disconnected');
     }
   };
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     localStorage.setItem('admin-settings', JSON.stringify(settings));
-    checkConnection(settings.apiUrl, settings.apiKey);
-    if (settings.apiUrl) {
-      fetchRules();
+    // Lưu key vào localStorage cho chat page
+    if (settings.bridgeApiKey) localStorage.setItem('pccc_bridge_api_key', settings.bridgeApiKey);
+    else localStorage.removeItem('pccc_bridge_api_key');
+    // Lưu key vào .env qua be-main (không cần restart)
+    if (settings.bridgeApiKey && settings.apiUrl) {
+      try {
+        await fetch(`${settings.apiUrl}/api/settings/bridge-key`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: settings.bridgeApiKey })
+        });
+      } catch { /* ignore - localStorage đã lưu */ }
+    }
+    checkConnection(settings.apiUrl);
+    if (settings.apiUrl) fetchRules();
+
+    // Validate key
+    if (settings.bridgeApiKey) {
+      setKeyStatus('checking');
+      try {
+        const res = await fetch(`${settings.apiUrl}/api/settings/bridge-status`, {
+          headers: { 'Content-Type': 'application/json', 'X-Bridge-API-Key': settings.bridgeApiKey }
+        });
+        const data = await res.json().catch(() => ({})) as { connected?: boolean };
+        setKeyStatus(data.connected ? 'valid' : 'invalid');
+      } catch {
+        setKeyStatus('invalid');
+      }
+    } else {
+      setKeyStatus('idle');
     }
   };
 
   const getHeaders = () => {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
-    };
-    if (settings.apiKey) {
-      headers['X-Admin-API-Key'] = settings.apiKey;
-    }
-    return headers;
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (settings.bridgeApiKey) h['X-Bridge-API-Key'] = settings.bridgeApiKey;
+    return h;
   };
 
   const fetchRules = async () => {
@@ -270,36 +283,43 @@ export default function AdminPage() {
         {/* Settings Tab */}
         {activeTab === 'settings' && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-xl font-semibold mb-4">⚙️ Cấu hình kết nối</h2>
+            <h2 className="text-xl font-semibold mb-4">⚙️ Cài đặt hệ thống</h2>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-1">API URL (be-main)</label>
+                <label className="block text-sm font-medium mb-1">URL máy chủ</label>
                 <input
                   type="text"
                   value={settings.apiUrl}
                   onChange={e => setSettings({ ...settings, apiUrl: e.target.value })}
-                  placeholder="http://localhost:3001"
+                  placeholder={process.env.NEXT_PUBLIC_API_URL || "http://localhost:6969"}
                   className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Admin API Key (nếu có)</label>
+                <label className="block text-sm font-medium mb-1">
+                  API Key <span className="text-red-600">*</span>
+                  {keyStatus === 'checking' && <span className="ml-2 text-xs text-gray-500">Đang kiểm tra…</span>}
+                  {keyStatus === 'valid'    && <span className="ml-2 text-xs text-green-600">✓ Hợp lệ</span>}
+                  {keyStatus === 'invalid'  && <span className="ml-2 text-xs text-red-600">✗ Không hợp lệ</span>}
+                </label>
                 <input
                   type="password"
-                  value={settings.apiKey}
-                  onChange={e => setSettings({ ...settings, apiKey: e.target.value })}
-                  placeholder="Để trống nếu không yêu cầu"
-                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500"
+                  autoComplete="new-password"
+                  value={settings.bridgeApiKey}
+                  onChange={e => { setSettings({ ...settings, bridgeApiKey: e.target.value }); setKeyStatus('idle'); }}
+                  placeholder="Nhập API Key để kích hoạt chatbot"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 ${
+                    keyStatus === 'valid' ? 'border-green-400' : keyStatus === 'invalid' ? 'border-red-400' : ''
+                  }`}
                 />
               </div>
 
               <div className="pt-4 border-t">
-                <h3 className="font-medium mb-3">Bridge Configuration (read-only)</h3>
+                <h3 className="font-medium mb-3">Trạng thái</h3>
                 <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-                  <p><span className="font-medium">Bridge URL:</span> {settings.bridgeUrl || 'http://127.0.0.1:1122'}</p>
-                  <p><span className="font-medium">Bridge API Key:</span> {settings.bridgeApiKey ? '••••••••' : 'Không cấu hình'}</p>
+                  <p><span className="font-medium">API Key:</span> {settings.bridgeApiKey ? '••••••••' : 'Không cấu hình'}</p>
                 </div>
               </div>
 
@@ -461,3 +481,13 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+

@@ -18,16 +18,32 @@ import {
   HOST, PORT, NUM_WORKERS, PREFERRED_BROWSER, CHAT_URL, HIDE_WINDOW,
   LAUNCH_MINIMIZED, LAUNCH_OFFSCREEN, PROFILE_DIR,
   STREAM_NO_CHANGE_THRESHOLD, STREAM_FALLBACK_THRESHOLD,
-  STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL,
-  API_KEY, ADMIN_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD
+  STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL, ADMIN_USERNAME, ADMIN_PASSWORD
 } from './config.mjs';
 import { isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
 import { isAuthConfigured } from './auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// In-memory store for admin API keys (in production, use database)
+// In-memory store for admin API keys
 const adminKeys = new Map();
+
+// Persistent store
+const KEYS_PATH = path.join(__dirname, '..', 'keys.json');
+function loadKeys() {
+  try {
+    if (fs.existsSync(KEYS_PATH)) {
+      const data = JSON.parse(fs.readFileSync(KEYS_PATH, 'utf8'));
+      if (Array.isArray(data)) data.forEach(k => adminKeys.set(k.id, k));
+    }
+  } catch (e) { console.warn('[admin] Cannot read keys.json:', e.message); }
+}
+function saveKeys() {
+  try { fs.writeFileSync(KEYS_PATH, JSON.stringify([...adminKeys.values()], null, 2), 'utf8'); }
+  catch (e) { console.warn('[admin] Cannot write keys.json:', e.message); }
+}
+export function getAdminKeys() { return [...adminKeys.values()]; }
+loadKeys();
 // Session store: token -> { expiresAt }
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8h
 const sessions = new Map();
@@ -115,8 +131,6 @@ function loadCurrentConfig() {
     STREAM_MAX_TIMEOUT,
     STREAM_START_TIMEOUT,
     STREAM_CHECK_INTERVAL,
-    BRIDGE_API_KEY: API_KEY,
-    BRIDGE_ADMIN_API_KEY: ADMIN_API_KEY
   };
   return config;
 }
@@ -165,15 +179,6 @@ function saveConfig(newConfig) {
   merged.BRIDGE_STREAM_MAX_TIMEOUT = String(newConfig.STREAM_MAX_TIMEOUT ?? STREAM_MAX_TIMEOUT);
   merged.BRIDGE_STREAM_START_TIMEOUT = String(newConfig.STREAM_START_TIMEOUT ?? STREAM_START_TIMEOUT);
   merged.BRIDGE_STREAM_CHECK_INTERVAL = String(newConfig.STREAM_CHECK_INTERVAL ?? STREAM_CHECK_INTERVAL);
-
-  if (newConfig.BRIDGE_API_KEY && String(newConfig.BRIDGE_API_KEY).trim()) {
-    merged.BRIDGE_API_KEY = String(newConfig.BRIDGE_API_KEY).trim();
-  }
-
-  if (newConfig.BRIDGE_ADMIN_API_KEY && String(newConfig.BRIDGE_ADMIN_API_KEY).trim()) {
-    merged.BRIDGE_ADMIN_API_KEY = String(newConfig.BRIDGE_ADMIN_API_KEY).trim();
-  }
-
   try {
     writeEnvMerged(configFilePath, merged, preferredOrder);
     return { success: true };
@@ -197,6 +202,7 @@ function generateApiKey(name = 'New Key') {
   };
   
   adminKeys.set(keyInfo.id, keyInfo);
+  saveKeys();
   return keyInfo;
 }
 
@@ -244,7 +250,6 @@ export function validateAdminKey(req) {
 
   // 2. Legacy API key (backward compat)
   const providedKey = req.headers['x-admin-api-key'] || req.headers['X-Admin-API-Key'] || '';
-  if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) return { valid: true, keyId: 'env-key' };
   for (const [id, keyInfo] of adminKeys) {
     if (keyInfo.key === providedKey && keyInfo.active) return { valid: true, keyId: id };
   }
@@ -346,6 +351,7 @@ export async function handleAdminKeyDetail(req, res, keyId) {
         const updates = JSON.parse(body);
         const updatedKey = { ...keyInfo, ...updates, updatedAt: new Date().toISOString() };
         adminKeys.set(keyId, updatedKey);
+        saveKeys();
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ key: updatedKey }));
       } catch (err) {
@@ -355,6 +361,7 @@ export async function handleAdminKeyDetail(req, res, keyId) {
     });
   } else if (req.method === 'DELETE') {
     adminKeys.delete(keyId);
+    saveKeys();
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
   } else {
@@ -390,7 +397,7 @@ export async function handleAdminStatus(req, res, workers) {
           busy: busyWorkers,
           generating: isGenerating() ? 1 : 0
         },
-        authEnabled: isAuthConfigured(),
+        authEnabled: [...adminKeys.values()].some(k => k.active),
         config: {
           preferredBrowser: PREFERRED_BROWSER,
           chatUrl: CHAT_URL,
@@ -534,6 +541,14 @@ export async function handleAdminBrowser(req, res) {
     res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 }
+
+
+
+
+
+
+
+
 
 
 

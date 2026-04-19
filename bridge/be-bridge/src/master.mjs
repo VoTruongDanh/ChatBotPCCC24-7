@@ -16,22 +16,24 @@ import {
   closeBrowser,
   sendPromptAndWaitResponse,
   startNewTemporaryChat,
-  isGenerating
 } from './worker.mjs';
 import { buildPrompt } from './prompt-builder.mjs';
-import { validateApiKey, sendUnauthorized, isAuthConfigured } from './auth.mjs';
+import { validateApiKey, sendUnauthorized, isAuthConfigured, registerKeyStore } from './auth.mjs';
 import { 
   handleAdminConfig, 
   handleAdminKeys, 
   handleAdminKeyDetail, 
   handleAdminStatus, 
   handleAdminWorkers, handleAdminBrowser,
-  handleAdminLogin, handleAdminLogout
+  handleAdminLogin, handleAdminLogout,
+  getAdminKeys
 } from './admin.mjs';
+
+// Wire key store vào auth module
+registerKeyStore(getAdminKeys);
 
 // Worker pool
 const workers = new Map();
-const pendingRequests = new Map();
 
 // ============================================
 // WORKER POOL MANAGEMENT
@@ -304,9 +306,9 @@ async function start() {
       console.log(`[Master] be-bridge running at http://${HOST}:${PORT}`);
       console.log(`[Master] Endpoints: /ping, /health, /internal/bridge/chat, /internal/bridge/chat/stream, /internal/bridge/reset-temp-chat`);
       if (isAuthConfigured()) {
-        console.log(`[Master] Authentication: ENABLED`);
+        console.log(`[Master] Authentication: ENABLED (${getAdminKeys().filter(k=>k.active).length} active keys)`);
       } else {
-        console.log(`[Master] Authentication: DISABLED (no BRIDGE_API_KEY set)`);
+        console.log(`[Master] Authentication: DISABLED (no active keys — tao key trong Admin Dashboard)`);
       }
     });
   } catch (err) {

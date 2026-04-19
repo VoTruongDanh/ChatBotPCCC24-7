@@ -74,10 +74,8 @@ export default function TabStatus({ status, onRefresh }: Props) {
           <div>
             <StatRow label="Listen"      value={`${bridge.host}:${bridge.port}`} />
             <StatRow label="Browser"     value={bridge.config.preferredBrowser} />
-            <StatRow label="Xác thực"    value={bridge.authEnabled ? 'Đã bật' : 'Đã tắt'} />
             <StatRow label="Ẩn cửa sổ"  value={bridge.config.hideWindow ? 'Có' : 'Không'} />
-            <StatRow label="Total keys"  value={String(admin.keysCount)} />
-            <StatRow label="Active keys" value={String(admin.activeKeys)} />
+            <StatRow label="API Keys"    value={`${admin.activeKeys} active / ${admin.keysCount} total`} />
           </div>
         </div>
       </div>

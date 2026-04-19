@@ -1,13 +1,10 @@
-export default async function chatRoutes(fastify, options) {
-  const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1122';
+﻿export default async function chatRoutes(fastify, options) {
+  const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1110';
   const BRIDGE_API_KEY = options.bridgeApiKey || '';
 
-  // Helper to add auth header if configured
   const getHeaders = () => {
     const headers = { 'Content-Type': 'application/json' };
-    if (BRIDGE_API_KEY) {
-      headers['X-Bridge-API-Key'] = BRIDGE_API_KEY;
-    }
+    if (BRIDGE_API_KEY) headers['X-Bridge-API-Key'] = BRIDGE_API_KEY;
     return headers;
   };
 
@@ -56,7 +53,6 @@ export default async function chatRoutes(fastify, options) {
     });
 
     try {
-      // Lấy rules từ service
       const { getActiveRules } = await import('../services/rules.service.mjs');
       const rules = getActiveRules();
 
@@ -66,6 +62,12 @@ export default async function chatRoutes(fastify, options) {
         body: JSON.stringify({ prompt, messages, rules })
       });
 
+      if (!response.ok) {
+        reply.raw.write(`data: ${JSON.stringify({ error: 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại sau.' })}\n\n`);
+        reply.raw.end();
+        return;
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
@@ -74,13 +76,31 @@ export default async function chatRoutes(fastify, options) {
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-        reply.raw.write(chunk);
+
+        // Parse và filter error messages kỹ thuật
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) { reply.raw.write(line + '\n'); continue; }
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.error) {
+              // Log kỹ thuật cho admin, trả về message thân thiện cho user
+              fastify.log.warn('[bridge-error]', data.error);
+              const userMsg = data.error.includes('Timeout') || data.error.includes('không phản hồi')
+                ? 'ChatGPT đang bận, vui lòng thử lại sau ít phút.'
+                : 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại.';
+              reply.raw.write(`data: ${JSON.stringify({ error: userMsg })}\n\n`);
+            } else {
+              reply.raw.write(line + '\n');
+            }
+          } catch { reply.raw.write(line + '\n'); }
+        }
       }
 
       reply.raw.end();
     } catch (err) {
       fastify.log.error(err);
-      reply.raw.write(`data: ${JSON.stringify({ error: 'Bridge không khả dụng' })}\n\n`);
+      reply.raw.write(`data: ${JSON.stringify({ error: 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại.' })}\n\n`);
       reply.raw.end();
     }
   });
@@ -101,3 +121,5 @@ export default async function chatRoutes(fastify, options) {
     }
   });
 }
+
+

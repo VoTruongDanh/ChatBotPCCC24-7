@@ -1,4 +1,4 @@
-/**
+﻿/**
  * be-main Backend
  * Import config từ root config module
  */
@@ -29,9 +29,20 @@ try {
 
 // Use config từ root hoặc fallback
 const HOST = mainConfig?.backend.host || process.env.MAIN_HOST || '127.0.0.1';
-const PORT = mainConfig?.backend.port || Number(process.env.MAIN_PORT || 6969);
-const BRIDGE_URL = mainConfig?.backend.bridge.url || process.env.BRIDGE_URL || 'http://localhost:1122';
-const BRIDGE_API_KEY = mainConfig?.backend.bridge.apiKey || process.env.BRIDGE_API_KEY || '';
+const PORT = mainConfig?.backend.port || Number(process.env.MAIN_PORT || 8888);
+const BRIDGE_URL = mainConfig?.backend.bridge.url || process.env.BRIDGE_URL || 'http://localhost:1110';
+
+// Đọc key động từ .env mỗi request để không cần restart khi đổi key
+import { readFileSync, existsSync } from 'node:fs';
+function getBridgeApiKey() {
+  try {
+    const envPath = join(__dirname, '..', '.env');
+    if (!existsSync(envPath)) return process.env.BRIDGE_API_KEY || '';
+    const raw = readFileSync(envPath, 'utf8');
+    const match = raw.match(/^BRIDGE_API_KEY=(.+)$/m);
+    return match ? match[1].trim() : process.env.BRIDGE_API_KEY || '';
+  } catch { return process.env.BRIDGE_API_KEY || ''; }
+}
 
 const fastify = Fastify({ logger: true });
 
@@ -44,7 +55,7 @@ fastify.get('/health', async () => ({
   service: 'be-main',
   bridge: BRIDGE_URL,
   port: PORT,
-  authEnabled: BRIDGE_API_KEY.length > 0
+  authEnabled: getBridgeApiKey().length > 0
 }));
 
 // Import routes
@@ -52,9 +63,9 @@ import chatRoutes from './routes/chat.mjs';
 import rulesRoutes from './routes/rules.mjs';
 import settingsRoutes from './routes/settings.mjs';
 
-fastify.register(chatRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, bridgeApiKey: BRIDGE_API_KEY });
+fastify.register(chatRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, bridgeApiKey: getBridgeApiKey() });
 fastify.register(rulesRoutes, { prefix: '/api' });
-fastify.register(settingsRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, bridgeApiKey: BRIDGE_API_KEY });
+fastify.register(settingsRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, bridgeApiKey: getBridgeApiKey() });
 
 // Start
 const start = async () => {
@@ -62,10 +73,10 @@ const start = async () => {
     await fastify.listen({ port: PORT, host: HOST });
     console.log(`[be-main] Running at http://${HOST}:${PORT}`);
     console.log(`[be-main] Bridge URL: ${BRIDGE_URL}`);
-    if (BRIDGE_API_KEY) {
+    if (getBridgeApiKey()) {
       console.log(`[be-main] Bridge Authentication: ENABLED`);
     } else {
-      console.log(`[be-main] Bridge Authentication: DISABLED (no BRIDGE_API_KEY set)`);
+      console.log(`[be-main] Bridge Authentication: DISABLED — them key trong PCCC Admin`);
     }
   } catch (err) {
     fastify.log.error(err);
@@ -74,3 +85,5 @@ const start = async () => {
 };
 
 start();
+
+

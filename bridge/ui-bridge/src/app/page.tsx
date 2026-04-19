@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
@@ -15,7 +15,7 @@ import TabWorkers  from './TabWorkers';
 import TabStatus   from './TabStatus';
 import LoginPage, { loadSession, clearSession } from './LoginPage';
 
-const BRIDGE_API_URL  = process.env.NEXT_PUBLIC_BRIDGE_API_URL  || 'http://localhost:1122';
+const BRIDGE_API_URL  = process.env.NEXT_PUBLIC_BRIDGE_API_URL  || 'http://localhost:1110';
 const SESSION_KEY = 'ui-bridge-session-token';
 
 /* ── Main page ─────────────────────────────────────────────────────── */
@@ -413,3 +413,4 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
     </>
   );
 }
+

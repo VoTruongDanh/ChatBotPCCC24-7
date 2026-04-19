@@ -1,0 +1,19 @@
+[
+  {
+    "id": "c49e32fd-745a-4624-b5eb-2a856455f744",
+    "name": "sds",
+    "key": "bridge_18600b6e6cc84db0a88252893df92f7b",
+    "createdAt": "2026-04-19T09:57:44.977Z",
+    "lastUsed": "2026-04-19T17:40:35.873Z",
+    "active": false,
+    "updatedAt": "2026-04-19T17:40:57.305Z"
+  },
+  {
+    "id": "2308f4c8-73ff-4ac5-b65d-76e9c54420df",
+    "name": "213",
+    "key": "bridge_c275d92036e64111bda079bcc79f1997",
+    "createdAt": "2026-04-19T17:41:02.314Z",
+    "lastUsed": null,
+    "active": true
+  }
+]

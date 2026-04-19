@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin', 'vietnamese'] })
 
 export const metadata: Metadata = {
-  title: 'be-bridge Admin Dashboard',
+  title: 'API Chatbot Admin',
   description: 'Quản lý cấu hình, API keys, workers và theo dõi trạng thái hệ thống be-bridge',
 }
 

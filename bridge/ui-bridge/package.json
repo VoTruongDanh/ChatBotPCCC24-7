@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 8889",
+    "dev": "node run.mjs dev",
     "build": "next build",
-    "start": "next start -p 3002",
+    "start": "node run.mjs start",
     "lint": "next lint"
   },
   "dependencies": {
@@ -20,6 +20,7 @@
     "@types/react": "^18.0.0",
     "@types/react-dom": "^18.0.0",
     "autoprefixer": "^10.5.0",
+    "dotenv-cli": "^7.4.4",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.19",
     "typescript": "^5.0.0"

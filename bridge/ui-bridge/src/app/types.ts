@@ -14,7 +14,6 @@ export interface BridgeConfig {
   STREAM_START_TIMEOUT: number;
   STREAM_CHECK_INTERVAL: number;
   BRIDGE_API_KEY: string;
-  BRIDGE_ADMIN_API_KEY?: string;
 }
 
 export interface ApiKey {

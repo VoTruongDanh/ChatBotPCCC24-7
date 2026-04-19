@@ -32,7 +32,7 @@ try {
 
 // Export config từ root hoặc fallback
 export const HOST = bridgeConfig?.backend.host || process.env.BRIDGE_HOST || '127.0.0.1';
-export const PORT = bridgeConfig?.backend.port || Number(process.env.BRIDGE_PORT || 1122);
+export const PORT = bridgeConfig?.backend.port || Number(process.env.BRIDGE_PORT || 1110);
 export const NUM_WORKERS = bridgeConfig?.backend.numWorkers || Math.max(1, Number(process.env.BRIDGE_NUM_WORKERS || 2));
 export const PREFERRED_BROWSER = bridgeConfig?.backend.preferredBrowser || process.env.BRIDGE_PREFERRED_BROWSER || 'chrome';
 export const CHAT_URL = bridgeConfig?.backend.chatUrl || process.env.BRIDGE_CHAT_URL || 'https://chatgpt.com/?temporary-chat=true';
@@ -46,10 +46,6 @@ export const PROFILE_DIR = bridgeConfig?.backend.profileDir ||
     process.env.BRIDGE_PROFILE_DIR || process.cwd(),
     process.env.BRIDGE_PROFILE_DIR ? '' : '.bridge-chrome-profile'
   );
-
-// API Keys
-export const API_KEY = bridgeConfig?.backend.apiKey || process.env.BRIDGE_API_KEY || '';
-export const ADMIN_API_KEY = bridgeConfig?.backend.adminApiKey || process.env.BRIDGE_ADMIN_API_KEY || '';
 
 // Admin login credentials
 export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';

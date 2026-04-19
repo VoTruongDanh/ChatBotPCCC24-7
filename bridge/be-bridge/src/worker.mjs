@@ -61,6 +61,14 @@ export async function launchBrowser() {
 
   await page.goto(CHAT_URL, { waitUntil: 'networkidle2', timeout: 60000 });
 
+  // Kiem tra bi redirect sang trang login
+  const currentUrl = page.url();
+  if (currentUrl.includes('/auth/login') || currentUrl.includes('/login')) {
+    console.error('[Worker] ChatGPT chua dang nhap! URL:', currentUrl);
+    throw new Error('ChatGPT yeu cau dang nhap. Tat BRIDGE_HIDE_WINDOW=false, restart, dang nhap, bat lai.');
+  }
+  console.log('[Worker] ChatGPT san sang:', currentUrl);
+
   if (HIDE_WINDOW) {
     await forceHideBrowserWindow();
   }
@@ -427,4 +435,5 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}`) {
     }
   })();
 }
+
 
