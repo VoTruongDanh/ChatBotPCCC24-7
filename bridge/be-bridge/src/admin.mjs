@@ -19,7 +19,7 @@ import {
   LAUNCH_MINIMIZED, LAUNCH_OFFSCREEN, PROFILE_DIR,
   STREAM_NO_CHANGE_THRESHOLD, STREAM_FALLBACK_THRESHOLD,
   STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL,
-  API_KEY, ADMIN_API_KEY
+  API_KEY, ADMIN_API_KEY, ADMIN_USERNAME, ADMIN_PASSWORD
 } from './config.mjs';
 import { isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
 import { isAuthConfigured } from './auth.mjs';
@@ -28,6 +28,23 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // In-memory store for admin API keys (in production, use database)
 const adminKeys = new Map();
+// Session store: token -> { expiresAt }
+const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8h
+const sessions = new Map();
+
+function createSession() {
+  const token = uuidv4().replace(/-/g, '') + uuidv4().replace(/-/g, '');
+  sessions.set(token, { expiresAt: Date.now() + SESSION_TTL_MS });
+  return token;
+}
+
+export function validateSession(token) {
+  if (!token) return false;
+  const s = sessions.get(token);
+  if (!s) return false;
+  if (Date.now() > s.expiresAt) { sessions.delete(token); return false; }
+  return true;
+}
 // Always resolve next to be-bridge (same as dotenv in master.mjs), not process.cwd()
 const configFilePath = path.join(__dirname, '..', '.env');
 
@@ -186,28 +203,52 @@ function generateApiKey(name = 'New Key') {
 /**
  * Validate admin API key
  */
-export function validateAdminKey(req) {
-  
-  const providedKey = req.headers['x-admin-api-key'] || req.headers['X-Admin-API-Key'] || '';
-  
-  if (!providedKey) {
-    return { valid: false, error: 'Missing admin API key' };
+export async function handleAdminLogin(req, res) {
+  if (req.method !== 'POST') {
+    res.writeHead(405, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
-  
-  // Check against ADMIN_API_KEY from .env first
-  
-    if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) {
-    return { valid: true, keyId: 'env-key' };
-  }
-
-  // Check if key exists in our store
-  for (const [id, keyInfo] of adminKeys) {
-    if (keyInfo.key === providedKey && keyInfo.active) {
-      return { valid: true, keyId: id };
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', () => {
+    try {
+      const { username, password } = JSON.parse(body);
+      if (!ADMIN_PASSWORD) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'ADMIN_PASSWORD chưa được cấu hình trong .env' }));
+      }
+      if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        const token = createSession();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ token, expiresIn: SESSION_TTL_MS }));
+      }
+      res.writeHead(401, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Sai tên đăng nhập hoặc mật khẩu' }));
+    } catch {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON' }));
     }
+  });
+}
+
+export async function handleAdminLogout(req, res) {
+  const token = req.headers['x-session-token'] || '';
+  sessions.delete(token);
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ success: true }));
+}
+export function validateAdminKey(req) {
+  // 1. Session token (username/password login)
+  const sessionToken = req.headers['x-session-token'] || '';
+  if (sessionToken && validateSession(sessionToken)) return { valid: true, keyId: 'session' };
+
+  // 2. Legacy API key (backward compat)
+  const providedKey = req.headers['x-admin-api-key'] || req.headers['X-Admin-API-Key'] || '';
+  if (ADMIN_API_KEY && providedKey === ADMIN_API_KEY) return { valid: true, keyId: 'env-key' };
+  for (const [id, keyInfo] of adminKeys) {
+    if (keyInfo.key === providedKey && keyInfo.active) return { valid: true, keyId: id };
   }
-  
-  return { valid: false, error: 'Invalid admin API key' };
+  return { valid: false, error: 'Unauthorized' };
 }
 
 /**
@@ -493,5 +534,8 @@ export async function handleAdminBrowser(req, res) {
     res.end(JSON.stringify({ error: 'Method not allowed' }));
   }
 }
+
+
+
 
 

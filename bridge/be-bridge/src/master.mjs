@@ -25,7 +25,8 @@ import {
   handleAdminKeys, 
   handleAdminKeyDetail, 
   handleAdminStatus, 
-  handleAdminWorkers, handleAdminBrowser 
+  handleAdminWorkers, handleAdminBrowser,
+  handleAdminLogin, handleAdminLogout
 } from './admin.mjs';
 
 // Worker pool
@@ -94,7 +95,7 @@ const server = http.createServer(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-API-Key, X-Admin-API-Key');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-API-Key, X-Admin-API-Key, X-Session-Token');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
@@ -123,6 +124,14 @@ const server = http.createServer(async (req, res) => {
 
   
   // Admin routes (require admin API key)
+  if (pathname === '/admin/login' && req.method === 'POST') {
+    return handleAdminLogin(req, res);
+  }
+
+  if (pathname === '/admin/logout' && req.method === 'POST') {
+    return handleAdminLogout(req, res);
+  }
+
   if (pathname === '/admin/config' && (req.method === 'GET' || req.method === 'PUT')) {
     return handleAdminConfig(req, res);
   }

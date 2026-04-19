@@ -51,6 +51,10 @@ export const PROFILE_DIR = bridgeConfig?.backend.profileDir ||
 export const API_KEY = bridgeConfig?.backend.apiKey || process.env.BRIDGE_API_KEY || '';
 export const ADMIN_API_KEY = bridgeConfig?.backend.adminApiKey || process.env.BRIDGE_ADMIN_API_KEY || '';
 
+// Admin login credentials
+export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+
 // Streaming Detection Configuration
 export const STREAM_NO_CHANGE_THRESHOLD = bridgeConfig?.backend.streaming.noChangeThreshold || 
   Number(process.env.BRIDGE_STREAM_NO_CHANGE_THRESHOLD || 10);
