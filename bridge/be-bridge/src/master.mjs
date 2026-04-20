@@ -1,23 +1,16 @@
-﻿import { config } from 'dotenv';
+import { config } from 'dotenv';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-// Load .env từ thư mục app TRƯỚC khi import các module khác
 const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: join(__dirname, '..', '.env') });
 
-// Import các module SAU khi đã load .env
 import http from 'node:http';
 import { URL } from 'node:url';
-import { v4 as uuidv4 } from 'uuid';
 import { HOST, PORT, NUM_WORKERS, getExecutable, PREFERRED_BROWSER } from './config.mjs';
-import {
-  launchBrowser,
-  closeBrowser,
-  sendPromptAndWaitResponse,
-  startNewTemporaryChat,
-} from './worker.mjs';
+import { WorkerInstance, closeBrowser } from './worker.mjs';
 import { buildPrompt } from './prompt-builder.mjs';
+import { startHealthMonitor, stopHealthMonitor } from './health-monitor.mjs';
 import { validateApiKey, sendUnauthorized, isAuthConfigured, registerKeyStore } from './auth.mjs';
 import { 
   handleAdminConfig, 
@@ -29,14 +22,18 @@ import {
   getAdminKeys
 } from './admin.mjs';
 
-// Wire key store vào auth module
 registerKeyStore(getAdminKeys);
 
-// Worker pool
-const workers = new Map();
+// ============================================
+// SMART QUEUE + SESSION AFFINITY
+// ============================================
 
-// Chat counter - reset sau 20 lượt
-let chatCounter = 0;
+const workerPool = new Map(); // workerId -> WorkerInstance
+const sessionMap = new Map(); // sessionId -> workerId (affinity)
+const requestQueue = []; // { resolve, reject, payload, sessionId, timer }
+
+const MAX_QUEUE_SIZE = 50;
+const REQUEST_TIMEOUT_MS = 30_000;
 const CHAT_RESET_THRESHOLD = 20;
 
 // ============================================
@@ -44,9 +41,8 @@ const CHAT_RESET_THRESHOLD = 20;
 // ============================================
 
 async function initWorkerPool() {
-  console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers...`);
+  console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers với browser riêng...`);
 
-  // Kiểm tra Chrome/Edge trước
   const executable = getExecutable();
   if (!executable) {
     throw new Error(
@@ -57,15 +53,14 @@ async function initWorkerPool() {
   
   let successCount = 0;
   for (let i = 0; i < NUM_WORKERS; i++) {
-    const workerId = uuidv4();
     try {
-      await launchBrowser();
-      workers.set(workerId, { id: workerId, busy: false });
+      const worker = new WorkerInstance(i);
+      await worker.launch();
+      workerPool.set(i, worker);
       successCount++;
-      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng: ${workerId.slice(0, 8)}`);
+      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng: worker-${i}`);
     } catch (err) {
       console.error(`[Master] Lỗi worker ${i + 1}:`, err.message);
-      console.error(`[Master] Stack trace:`, err.stack);
     }
   }
   
@@ -78,16 +73,76 @@ async function initWorkerPool() {
   console.log(`[Master] Đã khởi tạo ${successCount}/${NUM_WORKERS} workers thành công`);
 }
 
-function getAvailableWorker() {
-  for (const [id, w] of workers) {
-    if (!w.busy) return id;
+// Tìm worker: ưu tiên session affinity, sau đó worker rảnh bất kỳ
+function findWorker(sessionId) {
+  // 1. Session affinity: dùng lại worker cũ nếu còn rảnh
+  if (sessionId && sessionMap.has(sessionId)) {
+    const wId = sessionMap.get(sessionId);
+    const w = workerPool.get(wId);
+    if (w && !w.busy) return w;
+  }
+  // 2. Lấy worker rảnh bất kỳ
+  for (const w of workerPool.values()) {
+    if (!w.busy) return w;
   }
   return null;
 }
 
-function setWorkerBusy(workerId, busy) {
-  const worker = workers.get(workerId);
-  if (worker) worker.busy = busy;
+// Dispatch request vào queue
+function dispatch(payload, sessionId) {
+  return new Promise((resolve, reject) => {
+    if (requestQueue.length >= MAX_QUEUE_SIZE) {
+      return reject(new Error('Queue full – hệ thống đang tải cao'));
+    }
+
+    const timer = setTimeout(() => {
+      const idx = requestQueue.findIndex(r => r.resolve === resolve);
+      if (idx !== -1) requestQueue.splice(idx, 1);
+      reject(new Error('Request timeout'));
+    }, REQUEST_TIMEOUT_MS);
+
+    requestQueue.push({ resolve, reject, payload, sessionId, timer });
+    processQueue();
+  });
+}
+
+// Xử lý queue
+async function processQueue() {
+  if (requestQueue.length === 0) return;
+
+  const req = requestQueue[0];
+  const worker = findWorker(req.sessionId);
+  
+  if (!worker) {
+    // Không có worker rảnh - thông báo cho client đang chờ
+    const waitMsg = { waiting: true, queueLength: requestQueue.length, message: 'Đang chờ worker rảnh...' };
+    if (req.payload.onDelta) {
+      req.payload.onDelta(`[Hệ thống đang bận, bạn đứng thứ ${requestQueue.length} trong hàng đợi...]`);
+    }
+    console.log(`[Queue] Request chờ - queue length: ${requestQueue.length}`);
+    // Tiếp tục loop để check lại sau
+    setTimeout(() => processQueue(), 1000);
+    return;
+  }
+
+  requestQueue.shift();
+  clearTimeout(req.timer);
+
+  worker.busy = true;
+  if (req.sessionId) sessionMap.set(req.sessionId, worker.id);
+
+  try {
+    const result = await worker.sendPromptAndWaitResponse(req.payload.text, req.payload.onDelta);
+    req.resolve({ response: result, workerId: worker.id });
+  } catch (err) {
+    console.error(`[Worker ${worker.id}] Lỗi:`, err.message);
+    await worker.restart();
+    req.reject(err);
+  } finally {
+    worker.busy = false;
+    worker.lastActive = Date.now();
+    processQueue();
+  }
 }
 
 // ============================================
@@ -101,68 +156,62 @@ const server = http.createServer(async (req, res) => {
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-API-Key, X-Admin-API-Key, X-Session-Token');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Bridge-API-Key, X-Admin-API-Key, X-Session-Token, X-Session-Id');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(200);
     return res.end();
   }
 
-  // Route: GET /ping (no auth required)
+  // Route: GET /ping
   if (pathname === '/ping' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({ pong: true, time: Date.now() }));
   }
 
-  // Route: GET /health (no auth required)
+  // Route: GET /health
   if (pathname === '/health' && req.method === 'GET') {
-    const available = [...workers.values()].filter(w => !w.busy).length;
+    const available = [...workerPool.values()].filter(w => !w.busy).length;
     res.writeHead(200, { 'Content-Type': 'application/json' });
     return res.end(JSON.stringify({
       status: 'ok',
-      workers: workers.size,
+      workers: workerPool.size,
       available,
-      generating: [...workers.values()].filter(w => w.busy).length,
+      generating: [...workerPool.values()].filter(w => w.busy).length,
+      queueLength: requestQueue.length,
       authEnabled: isAuthConfigured(),
       port: PORT
     }));
   }
 
-  
-  // Admin routes (require admin API key)
+  // Admin routes
   if (pathname === '/admin/login' && req.method === 'POST') {
     return handleAdminLogin(req, res);
   }
-
   if (pathname === '/admin/logout' && req.method === 'POST') {
     return handleAdminLogout(req, res);
   }
-
   if (pathname === '/admin/config' && (req.method === 'GET' || req.method === 'PUT')) {
     return handleAdminConfig(req, res);
   }
-  
   if (pathname === '/admin/keys' && (req.method === 'GET' || req.method === 'POST')) {
     return handleAdminKeys(req, res);
   }
-  
   if (pathname.startsWith('/admin/keys/')) {
     const keyId = pathname.split('/')[3];
     return handleAdminKeyDetail(req, res, keyId);
   }
-  
   if (pathname === '/admin/status' && req.method === 'GET') {
-    return handleAdminStatus(req, res, workers);
+    return handleAdminStatus(req, res, workerPool);
   }
-  
   if (pathname === '/admin/browser' && (req.method === 'GET' || req.method === 'POST')) {
     return handleAdminBrowser(req, res);
   }
-  
   if (pathname === '/admin/workers' && (req.method === 'GET' || req.method === 'POST' || req.method === 'DELETE')) {
-    return handleAdminWorkers(req, res, workers);
+    return handleAdminWorkers(req, res, workerPool);
   }
-  // All other routes require authentication
+
+  // Auth required
   const auth = validateApiKey(req);
   if (!auth.valid) {
     return sendUnauthorized(res, auth.error);
@@ -183,8 +232,6 @@ const server = http.createServer(async (req, res) => {
     return handleResetChat(req, res);
   }
 
-
-  // 404
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
 });
@@ -198,7 +245,7 @@ async function handleChat(req, res) {
   req.on('data', chunk => body += chunk);
   req.on('end', async () => {
     try {
-      const { prompt, messages } = JSON.parse(body);
+      const { prompt, messages, sessionId } = JSON.parse(body);
       const text = prompt || (messages && messages.map(m => m.content).join('\n'));
 
       if (!text) {
@@ -206,23 +253,12 @@ async function handleChat(req, res) {
         return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
       }
 
-      const workerId = getAvailableWorker();
-      if (!workerId) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Không có worker sẵn sàng' }));
-      }
-
-      setWorkerBusy(workerId, true);
-      console.log(`[Master] Chat request từ worker ${workerId.slice(0, 8)}`);
-
       try {
-        const response = await sendPromptAndWaitResponse(text);
-        setWorkerBusy(workerId, false);
+        const result = await dispatch({ text }, sessionId);
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ response, workerId: workerId.slice(0, 8) }));
+        res.end(JSON.stringify(result));
       } catch (err) {
-        setWorkerBusy(workerId, false);
-        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.writeHead(503, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: err.message }));
       }
     } catch (err) {
@@ -237,7 +273,7 @@ async function handleChatStream(req, res) {
   req.on('data', chunk => body += chunk);
   req.on('end', async () => {
     try {
-      const { prompt, messages, rules } = JSON.parse(body);
+      const { prompt, messages, rules, sessionId } = JSON.parse(body);
       let text = prompt || (messages && messages.map(m => m.content).join('\n'));
 
       if (!text) {
@@ -245,18 +281,9 @@ async function handleChatStream(req, res) {
         return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
       }
 
-      // Build prompt với rules nếu có
       if (rules && rules.length > 0) {
         text = buildPrompt(rules, text);
       }
-
-      const workerId = getAvailableWorker();
-      if (!workerId) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Không có worker sẵn sàng' }));
-      }
-
-      setWorkerBusy(workerId, true);
 
       // SSE headers
       res.writeHead(200, {
@@ -266,32 +293,25 @@ async function handleChatStream(req, res) {
         'Access-Control-Allow-Origin': '*'
       });
 
-      console.log(`[Master] Stream request từ worker ${workerId.slice(0, 8)}`);
+      // Gửi thông báo đang chờ nếu chưa có worker rảnh
+      const checkWorker = findWorker(sessionId);
+      if (!checkWorker) {
+        res.write(`data: ${JSON.stringify({ waiting: true, message: '⏳ Hệ thống đang bận, đang chờ worker rảnh...' })}\n\n`);
+      }
 
       try {
-        const response = await sendPromptAndWaitResponse(text, (delta) => {
-          if (delta) {
-            res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+        const result = await dispatch({
+          text,
+          onDelta: (delta) => {
+            if (delta) res.write(`data: ${JSON.stringify({ delta })}\n\n`);
           }
-        });
-        res.write(`data: ${JSON.stringify({ done: true, response })}\n\n`);
+        }, sessionId);
 
-        // Tăng counter sau khi response thành công
-        chatCounter++;
-        console.log(`[Master] Chat counter: ${chatCounter}/${CHAT_RESET_THRESHOLD}`);
-
-        // Reset chat sau 20 lượt - kích hoạt ngay lập tức
-        if (chatCounter >= CHAT_RESET_THRESHOLD) {
-          console.log('[Master] Đạt ngưỡng 20 lượt, reset chat...');
-          chatCounter = 0;
-          startNewTemporaryChat().catch(e => console.warn('[Master] Reset error:', e.message));
-        }
+        res.write(`data: ${JSON.stringify({ done: true, response: result.response })}\n\n`);
       } catch (err) {
-
         res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
       }
 
-      setWorkerBusy(workerId, false);
       res.end();
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -301,14 +321,33 @@ async function handleChatStream(req, res) {
 }
 
 async function handleResetChat(req, res) {
-  try {
-    await startNewTemporaryChat();
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: true }));
-  } catch (err) {
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: err.message }));
-  }
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', async () => {
+    try {
+      const { sessionId } = JSON.parse(body);
+      
+      // Reset worker cụ thể nếu có session affinity
+      if (sessionId && sessionMap.has(sessionId)) {
+        const workerId = sessionMap.get(sessionId);
+        const worker = workerPool.get(workerId);
+        if (worker) {
+          await worker.startNewTemporaryChat();
+        }
+      } else {
+        // Reset tất cả workers
+        for (const worker of workerPool.values()) {
+          await worker.startNewTemporaryChat();
+        }
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
 }
 
 // ============================================
@@ -318,13 +357,15 @@ async function handleResetChat(req, res) {
 async function start() {
   try {
     await initWorkerPool();
+    startHealthMonitor(workerPool);
     server.listen(PORT, HOST, () => {
       console.log(`[Master] be-bridge running at http://${HOST}:${PORT}`);
       console.log(`[Master] Endpoints: /ping, /health, /internal/bridge/chat, /internal/bridge/chat/stream, /internal/bridge/reset-temp-chat`);
+      console.log(`[Master] Smart Queue: MAX_QUEUE=${MAX_QUEUE_SIZE}, TIMEOUT=${REQUEST_TIMEOUT_MS}ms`);
       if (isAuthConfigured()) {
         console.log(`[Master] Authentication: ENABLED (${getAdminKeys().filter(k=>k.active).length} active keys)`);
       } else {
-        console.log(`[Master] Authentication: DISABLED (no active keys — tao key trong Admin Dashboard)`);
+        console.log(`[Master] Authentication: DISABLED`);
       }
     });
   } catch (err) {
@@ -333,10 +374,12 @@ async function start() {
   }
 }
 
-// Graceful shutdown
 process.on('SIGINT', async () => {
   console.log('\n[Master] Đang đóng service...');
-  await closeBrowser();
+  stopHealthMonitor();
+  for (const worker of workerPool.values()) {
+    await worker.destroy();
+  }
   server.close(() => {
     console.log('[Master] Service đã đóng');
     process.exit(0);
@@ -344,6 +387,3 @@ process.on('SIGINT', async () => {
 });
 
 start();
-
-
-

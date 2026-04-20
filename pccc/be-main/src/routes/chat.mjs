@@ -2,10 +2,11 @@ export default async function chatRoutes(fastify, options) {
   const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1110';
   const getBridgeApiKey = options.getBridgeApiKey || (() => '');
 
-  const getHeaders = () => {
+  const getHeaders = (sessionId = null) => {
     const headers = { 'Content-Type': 'application/json' };
     const key = getBridgeApiKey();
     if (key) headers['X-Bridge-API-Key'] = key;
+    if (sessionId) headers['X-Session-Id'] = sessionId;
     return headers;
   };
 
@@ -20,8 +21,8 @@ export default async function chatRoutes(fastify, options) {
     try {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat`, {
         method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ prompt, messages })
+        headers: getHeaders(sessionId),
+        body: JSON.stringify({ prompt, messages, sessionId })
       });
 
       if (!response.ok) {
@@ -65,8 +66,8 @@ export default async function chatRoutes(fastify, options) {
 
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
-        headers: getHeaders(),
-        body: JSON.stringify({ prompt, messages, rules })
+        headers: getHeaders(sessionId),
+        body: JSON.stringify({ prompt, messages, rules, sessionId })
       });
 
       if (!response.ok) {
@@ -114,10 +115,13 @@ export default async function chatRoutes(fastify, options) {
 
   // POST /api/reset - Reset chat session
   fastify.post('/reset', async (request, reply) => {
+    const { sessionId } = request.body || {};
+    
     try {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/reset-temp-chat`, {
         method: 'POST',
-        headers: getHeaders()
+        headers: getHeaders(sessionId),
+        body: JSON.stringify({ sessionId })
       });
 
       const data = await response.json();
