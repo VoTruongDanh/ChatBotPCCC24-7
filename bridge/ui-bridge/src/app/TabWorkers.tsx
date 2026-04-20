@@ -106,7 +106,7 @@ export default function TabWorkers({
               <div key={w.id} className="admin-row">
                 <span className={`admin-dot ${w.busy ? 'admin-dot-warn' : 'admin-dot-success'}`} />
                 <span className="font-mono text-xs flex-1" style={{ color: 'var(--c-text-2)' }}>
-                  {w.id.slice(0, 12)}…
+                  worker-{w.id}
                 </span>
                 <span className={w.busy ? 'admin-badge-warn' : 'admin-badge-success'}>
                   {w.busy ? 'Đang xử lý' : 'Sẵn sàng'}
