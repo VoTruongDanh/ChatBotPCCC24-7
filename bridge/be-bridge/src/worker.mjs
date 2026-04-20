@@ -246,7 +246,6 @@ export async function isGenerating() {
 export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
   if (!page) {
     throw new Error('Browser chưa được khởi tạo');
-  }
 
   const input = await findInput();
   if (!input) {
@@ -257,7 +256,8 @@ export async function sendPromptAndWaitResponse(prompt, onDelta = null) {
   const tagName = await input.evaluate(el => el.tagName.toLowerCase());
   const isContentEditable = await input.evaluate(el => el.contentEditable === 'true');
 
-  console.log(`[Worker] Input type: ${tagName}, contentEditable: ${isContentEditable}`);
+  console.log(`[Worker] Input: ${tagName}, contentEditable: ${isContentEditable}`);
+  console.log(`[Worker] Prompt (${prompt.length} chars): ${prompt.slice(0, 100)}...`);
 
   // Clear và type
   await input.click({ clickCount: 3 });

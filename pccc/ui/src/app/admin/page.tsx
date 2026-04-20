@@ -233,9 +233,11 @@ export default function AdminPage() {
               )}
 
               <button className="a-btn a-btn-primary" onClick={saveSettings} disabled={savingSettings} style={{width:'100%', padding:'10px 16px'}}>
-                {savingSettings ? <><Spin /> Đang lưu…</> : '💾 Lưu cài đặt'}
+                {savingSettings ? <><Spin /> Đang lưu…</> : '💾 Lưu cài đặt'}'💾 Lưu cài đặt'}
               </button>
-            </div>
+            
+
+              </div>
           </div>
         )}
 

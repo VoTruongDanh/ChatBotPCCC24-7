@@ -9,7 +9,7 @@
     "pccc/*"
   ],
   "scripts": {
-    "dev": "turbo run dev",
+    "dev": "node scripts/sync-config.mjs && turbo run dev",
     "dev:be-bridge": "npm run dev --workspace=bridge/be-bridge",
     "dev:ui-bridge": "npm run dev --workspace=bridge/ui-bridge",
     "dev:be-main": "npm run dev --workspace=pccc/be-main",

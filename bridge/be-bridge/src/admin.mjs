@@ -30,6 +30,7 @@ const adminKeys = new Map();
 
 // Persistent store
 const KEYS_PATH = path.join(__dirname, '..', 'keys.json');
+const BRIDGE_ENV_PATH = path.join(__dirname, '..', '..', '.env');
 function loadKeys() {
   try {
     if (fs.existsSync(KEYS_PATH)) {
@@ -42,6 +43,26 @@ function saveKeys() {
   try { fs.writeFileSync(KEYS_PATH, JSON.stringify([...adminKeys.values()], null, 2), 'utf8'); }
   catch (e) { console.warn('[admin] Cannot write keys.json:', e.message); }
 }
+// Sync active key to bridge/.env for config sync
+function syncKeyToEnv(key) {
+  try {
+    let envContent = '';
+    if (fs.existsSync(BRIDGE_ENV_PATH)) {
+      envContent = fs.readFileSync(BRIDGE_ENV_PATH, 'utf8');
+    }
+    
+    const keyLine = `BRIDGE_API_KEY=${key}`;
+    if (envContent.includes('BRIDGE_API_KEY=')) {
+      envContent = envContent.replace(/^BRIDGE_API_KEY=.*$/m, keyLine);
+    } else {
+      envContent += `\n${keyLine}\n`;
+    }
+    
+    fs.writeFileSync(BRIDGE_ENV_PATH, envContent, 'utf8');
+    console.log('[admin] Synced BRIDGE_API_KEY to bridge/.env');
+  } catch (e) { console.warn('[admin] Cannot sync key to .env:', e.message); }
+}
+
 export function getAdminKeys() { return [...adminKeys.values()]; }
 loadKeys();
 // Session store: token -> { expiresAt }

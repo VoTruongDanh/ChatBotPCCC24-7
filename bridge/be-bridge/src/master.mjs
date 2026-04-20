@@ -35,6 +35,10 @@ registerKeyStore(getAdminKeys);
 // Worker pool
 const workers = new Map();
 
+// Chat counter - reset sau 20 lượt
+let chatCounter = 0;
+const CHAT_RESET_THRESHOLD = 20;
+
 // ============================================
 // WORKER POOL MANAGEMENT
 // ============================================
@@ -271,7 +275,19 @@ async function handleChatStream(req, res) {
           }
         });
         res.write(`data: ${JSON.stringify({ done: true, response })}\n\n`);
+
+        // Tăng counter sau khi response thành công
+        chatCounter++;
+        console.log(`[Master] Chat counter: ${chatCounter}/${CHAT_RESET_THRESHOLD}`);
+
+        // Reset chat sau 20 lượt - kích hoạt ngay lập tức
+        if (chatCounter >= CHAT_RESET_THRESHOLD) {
+          console.log('[Master] Đạt ngưỡng 20 lượt, reset chat...');
+          chatCounter = 0;
+          startNewTemporaryChat().catch(e => console.warn('[Master] Reset error:', e.message));
+        }
       } catch (err) {
+
         res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
       }
 

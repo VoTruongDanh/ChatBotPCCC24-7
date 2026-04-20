@@ -1,10 +1,11 @@
-﻿export default async function chatRoutes(fastify, options) {
+export default async function chatRoutes(fastify, options) {
   const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1110';
-  const BRIDGE_API_KEY = options.bridgeApiKey || '';
+  const getBridgeApiKey = options.getBridgeApiKey || (() => '');
 
   const getHeaders = () => {
     const headers = { 'Content-Type': 'application/json' };
-    if (BRIDGE_API_KEY) headers['X-Bridge-API-Key'] = BRIDGE_API_KEY;
+    const key = getBridgeApiKey();
+    if (key) headers['X-Bridge-API-Key'] = key;
     return headers;
   };
 
@@ -44,6 +45,10 @@
       return reply.status(400).send({ error: 'Thiếu prompt hoặc messages' });
     }
 
+    // Log request để debug
+    const promptPreview = prompt ? prompt.slice(0, 100) : messages?.map(m => m.content).join(' ').slice(0, 100);
+    fastify.log.info(`[chat/stream] New request - sessionId: ${sessionId?.slice(0, 8)}, prompt: ${promptPreview}...`);
+
     // SSE headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -55,6 +60,8 @@
     try {
       const { getActiveRules } = await import('../services/rules.service.mjs');
       const rules = getActiveRules();
+
+      fastify.log.info(`[chat/stream] Forwarding to bridge with ${rules.length} rules`);
 
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
@@ -121,5 +128,3 @@
     }
   });
 }
-
-

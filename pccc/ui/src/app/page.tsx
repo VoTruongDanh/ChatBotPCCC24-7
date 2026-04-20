@@ -400,7 +400,7 @@ export default function ChatPage() {
   const title2 = useScramble('Thông Minh', 900);
 
   useEffect(() => { 
-    setSessionId(crypto.randomUUID()); 
+    setSessionId(self.crypto?.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36)); 
     setMounted(true);
     // Detect system theme
     const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -440,8 +440,8 @@ export default function ChatPage() {
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading || connectionStatus !== 'connected') return;
-    const msgId = crypto.randomUUID();
-    const userMsg: Message = { role: 'user', content: input, status: 'done', id: crypto.randomUUID() };
+    const msgId = (self.crypto?.randomUUID?.()||Math.random().toString(36).slice(2)+Date.now().toString(36));
+    const userMsg: Message = { role: 'user', content: input, status: 'done', id: (self.crypto?.randomUUID?.()||Math.random().toString(36).slice(2)+Date.now().toString(36)) };
     setMessages(prev => [...prev, userMsg]);
     const savedInput = input;
     setInput('');

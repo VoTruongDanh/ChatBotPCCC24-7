@@ -13,6 +13,15 @@
     "name": "213",
     "key": "bridge_c275d92036e64111bda079bcc79f1997",
     "createdAt": "2026-04-19T17:41:02.314Z",
+    "lastUsed": "2026-04-20T04:11:08.774Z",
+    "active": false,
+    "updatedAt": "2026-04-20T04:12:16.262Z"
+  },
+  {
+    "id": "de777ed8-efcf-470e-9309-bf8e438fb4bc",
+    "name": "eqwe",
+    "key": "bridge_d4d6f8b6a6c44c50b0e3a01b5f8bd7ee",
+    "createdAt": "2026-04-20T04:12:19.734Z",
     "lastUsed": null,
     "active": true
   }
