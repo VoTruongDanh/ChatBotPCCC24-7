@@ -3,12 +3,13 @@
 # ============================================
 node_modules/
 package-lock.json
+yarn.lock
+pnpm-lock.yaml
 
 # ============================================
 # BUILD OUTPUTS
 # ============================================
 dist/
-.cursor/
 build/
 .next/
 .turbo/
@@ -25,9 +26,21 @@ out/
 
 # Module configs (keep examples)
 bridge/.env
+bridge/be-bridge/.env
+bridge/ui-bridge/.env
 pccc/.env
+pccc/be/.env
+pccc/ui/.env
 !bridge/.env.example
+!bridge/be-bridge/.env.example
+!bridge/ui-bridge/.env.example
 !pccc/.env.example
+!pccc/be/.env.example
+!pccc/ui/.env.example
+
+# Sensitive keys
+bridge/be-bridge/keys.json
+pccc/be/keys.json
 
 # ============================================
 # LOGS
@@ -57,7 +70,6 @@ $RECYCLE.BIN/
 # IDE & EDITORS
 # ============================================
 .idea/
-.vscode/
 *.swp
 *.swo
 *.swn
@@ -67,6 +79,12 @@ $RECYCLE.BIN/
 .settings/
 *.sublime-project
 *.sublime-workspace
+
+# Keep .vscode for shared settings
+# .vscode/
+
+# Keep .cursor for AI skills
+.cursor/
 
 # ============================================
 # TEMPORARY FILES
@@ -81,6 +99,15 @@ $RECYCLE.BIN/
 # BRIDGE SPECIFIC
 # ============================================
 .bridge-chrome-profile/
+bridge/be-bridge/public/admin/*.html
+bridge/ui-bridge/.next/
+
+# ============================================
+# PCCC SPECIFIC
+# ============================================
+pccc/ui/.next/
+pccc/be/uploads/
+pccc/be/temp/
 
 # ============================================
 # AI GENERATED (DO NOT COMMIT)
@@ -89,16 +116,27 @@ $RECYCLE.BIN/
 *-APPLIED.md
 READY-TO-*.md
 SETUP-*.md
+.ai-memory.md
 
 # Keep important docs
 !README.md
 !CONFIG-MANAGEMENT.md
 !HOW-TO-RUN.md
 !QUICK-START.md
+!bridge/be-bridge/INTEGRATION.md
+!bridge/be-bridge/STREAMING-TUNING.md
+!bridge/ADMIN-GUIDE.md
+
+# ============================================
+# TEST & COVERAGE
+# ============================================
+coverage/
+.nyc_output/
+*.lcov
 
 # ============================================
 # OLD STRUCTURE (DEPRECATED)
 # ============================================
-apps/
+apps/ui/
 config/
 codetemp/
