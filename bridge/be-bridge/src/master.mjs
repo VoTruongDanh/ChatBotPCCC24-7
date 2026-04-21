@@ -117,6 +117,7 @@ function dispatch(payload) {
     }
 
     worker.busy = true;
+    
     worker.sendPromptAndWaitResponse(payload.text, payload.onDelta)
       .then(result => resolve({ response: result, workerId: worker.id }))
       .catch(async err => {
@@ -147,25 +148,36 @@ function getSessionHistory(sessionId) {
 function buildPromptWithHistory(rules, history, userMessage) {
   let text = '';
   
-  // System prompt
+  // System prompt cực mạnh
+  text += '⚠️ QUAN TRỌNG: Bạn đang trong cuộc trò chuyện liên tục với CÙNG MỘT người. Hãy nhớ thông tin từ lịch sử bên dưới.\n\n';
+  
   if (rules && rules.length > 0) {
-    text = buildPrompt(rules, '');
+    text += buildPrompt(rules, '');
     text += '\n\n';
   }
   
-  // Conversation format
+  // Lịch sử với format rõ ràng
   if (history.length > 0) {
-    text += 'Đây là cuộc trò chuyện đang diễn ra. Hãy tiếp tục dựa trên ngữ cảnh:\n\n';
-    for (const msg of history) {
+    text += '📜 LỊCH SỬ CUỘC TRÒ CHUYỆN (Đọc kỹ trước khi trả lời):\n';
+    text += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    
+    for (let i = 0; i < history.length; i++) {
+      const msg = history[i];
       if (msg.role === 'user') {
-        text += `User: ${msg.content}\n\n`;
+        text += `\n👤 Người dùng (tin nhắn ${i + 1}):\n${msg.content}\n`;
       } else {
-        text += `Assistant: ${msg.content}\n\n`;
+        text += `\n🤖 Bạn đã trả lời (tin nhắn ${i + 1}):\n${msg.content}\n`;
       }
     }
+    
+    text += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    text += '⚠️ Hãy dựa vào lịch sử trên để trả lời câu hỏi tiếp theo.\n';
+    text += '⚠️ KHÔNG được bịa thông tin mới nếu đã có trong lịch sử.\n\n';
   }
   
-  text += `User: ${userMessage}\n\nAssistant:`;
+  text += `👤 Người dùng hỏi tiếp:\n${userMessage}\n\n`;
+  text += `🤖 Bạn trả lời (dựa vào lịch sử ở trên):`;
+  
   return text;
 }
 
