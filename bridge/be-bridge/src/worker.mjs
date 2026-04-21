@@ -32,6 +32,7 @@ const IMAGE_MIME_EXT = {
 
 const IMAGE_UPLOAD_MAX_WAIT = 30000;
 const IMAGE_UPLOAD_RETRY = 3;
+const activeWorkers = new Map();
 
 function parseImageDataUrl(dataUrl) {
   if (!dataUrl || typeof dataUrl !== 'string') return null;
@@ -114,6 +115,7 @@ export class WorkerInstance {
     if (HIDE_WINDOW) {
       await this.forceHideBrowserWindow();
     }
+    activeWorkers.set(this.id, this);
     this.lastActive = Date.now();
     return this;
   }
@@ -162,6 +164,7 @@ export class WorkerInstance {
   }
 
   async destroy() {
+    activeWorkers.delete(this.id);
     if (this.browser) {
       await this.browser.close();
       this.browser = null;
@@ -641,6 +644,13 @@ export class WorkerInstance {
 let browser = null;
 let page = null;
 
+function getPrimaryWorker() {
+  for (const worker of activeWorkers.values()) {
+    if (worker.browser && worker.page) return worker;
+  }
+  return null;
+}
+
 export async function launchBrowser() {
   const w = new WorkerInstance('default');
   await w.launch();
@@ -658,8 +668,9 @@ export async function closeBrowser() {
 }
 
 export async function showBrowserWindow() {
-  if (!browser) throw new Error('Browser chua khoi dong');
-  const pages = await browser.pages();
+  const worker = getPrimaryWorker();
+  if (!worker?.browser) throw new Error('Browser chua khoi dong');
+  const pages = await worker.browser.pages();
   if (!pages.length) throw new Error('Khong co trang nao dang mo');
   const cdp = await pages[0].createCDPSession();
   const { windowId } = await cdp.send('Browser.getWindowForTarget');
@@ -668,8 +679,9 @@ export async function showBrowserWindow() {
 }
 
 export async function hideBrowserWindow() {
-  if (!browser) throw new Error('Browser chua khoi dong');
-  const pages = await browser.pages();
+  const worker = getPrimaryWorker();
+  if (!worker?.browser) throw new Error('Browser chua khoi dong');
+  const pages = await worker.browser.pages();
   if (!pages.length) throw new Error('Khong co trang nao dang mo');
   const cdp = await pages[0].createCDPSession();
   const { windowId } = await cdp.send('Browser.getWindowForTarget');
@@ -678,50 +690,31 @@ export async function hideBrowserWindow() {
 }
 
 export function isBrowserRunning() {
-  return browser !== null;
+  return getPrimaryWorker() !== null;
 }
 
 export async function sendPromptAndWaitResponse(prompt, onDelta = null, _imageDataUrl = null) {
-  if (!page) {
+  const worker = getPrimaryWorker();
+  if (!worker) {
     throw new Error('Browser chua duoc khoi tao');
   }
-
-  const input = await page.$('textarea#prompt-textarea, textarea[placeholder*="Message"], div[contenteditable="true"]');
-  if (!input) {
-    throw new Error('Khong tim thay input textarea hoac contenteditable');
-  }
-
-  await input.click({ clickCount: 3 });
-  await page.keyboard.type(prompt, { delay: 30 });
-  await delay(500);
-  await page.keyboard.press('Enter');
-  await delay(3000);
-  return await page.evaluate(() => {
-    const responses = document.querySelectorAll('[data-message-author-role="assistant"]');
-    return responses.length > 0 ? responses[responses.length - 1].innerText : null;
-  });
+  return worker.sendPromptAndWaitResponse(prompt, onDelta, _imageDataUrl);
 }
 
 export async function startNewTemporaryChat() {
-  if (!page) return;
-  try {
-    await page.goto(CHAT_URL, { waitUntil: 'networkidle2', timeout: 30000 });
-  } catch (e) {
-    console.error('[Worker] Loi reset chat:', e.message);
-  }
+  const worker = getPrimaryWorker();
+  if (!worker) return;
+  await worker.startNewTemporaryChat();
 }
 
-export function getPage() { return page; }
-export function getBrowser() { return browser; }
+export function getPage() { return getPrimaryWorker()?.page || null; }
+export function getBrowser() { return getPrimaryWorker()?.browser || null; }
 
 export async function isGenerating() {
-  if (!page) return false;
-  try {
-    return await page.evaluate(() => {
-      const stopBtn = document.querySelector('[data-testid="stop-generating"], button[aria-label="Stop generating"]');
-      return !!(stopBtn && stopBtn.offsetParent !== null);
-    });
-  } catch {
-    return false;
+  for (const worker of activeWorkers.values()) {
+    if (await worker.isGenerating()) {
+      return true;
+    }
   }
+  return false;
 }

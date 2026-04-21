@@ -380,6 +380,49 @@
     color: var(--c-info-txt);
   }
 
+  .admin-toast-stack {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: min(420px, calc(100vw - 32px));
+    pointer-events: none;
+  }
+
+  .admin-toast {
+    @apply admin-alert;
+    box-shadow: var(--shadow-md);
+    backdrop-filter: blur(8px);
+    pointer-events: auto;
+    animation: admin-toast-in 180ms ease-out;
+  }
+
+  .admin-toast-success {
+    background: rgba(236, 253, 245, 0.96);
+    border: 1px solid var(--c-success-bd);
+    color: var(--c-success-txt);
+  }
+
+  .admin-toast-error {
+    background: rgba(254, 242, 242, 0.97);
+    border: 1px solid var(--c-danger-bd);
+    color: var(--c-danger-txt);
+  }
+
+  @keyframes admin-toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-10px) translateY(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) translateY(0);
+    }
+  }
+
   /* Empty state */
   .admin-empty {
     @apply flex flex-col items-center justify-center rounded-xl py-14 text-center;
@@ -575,4 +618,12 @@
   letter-spacing: 0.08em;
   color: rgba(255,255,255,0.4);
   text-transform: uppercase;
+}
+
+@media (max-width: 640px) {
+  .admin-toast-stack {
+    top: 12px;
+    left: 12px;
+    width: calc(100vw - 24px);
+  }
 }

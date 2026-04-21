@@ -20,7 +20,7 @@ import {
   STREAM_NO_CHANGE_THRESHOLD, STREAM_FALLBACK_THRESHOLD,
   STREAM_MAX_TIMEOUT, STREAM_START_TIMEOUT, STREAM_CHECK_INTERVAL, ADMIN_USERNAME, ADMIN_PASSWORD
 } from './config.mjs';
-import { isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
+import { WorkerInstance, isGenerating, showBrowserWindow, hideBrowserWindow, isBrowserRunning } from './worker.mjs';
 import { isAuthConfigured } from './auth.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -456,26 +456,40 @@ export async function handleAdminWorkers(req, res, workers) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ workers: workerList }));
   } else if (req.method === 'POST') {
-    // Add logical worker slots (single shared Puppeteer browser in worker.mjs)
     let body = '';
     req.on('data', chunk => body += chunk);
-    req.on('end', () => {
+    req.on('end', async () => {
       try {
         const { count = 1 } = JSON.parse(body);
         let successCount = 0;
         const n = Math.min(20, Math.max(1, Number(count) || 1));
+        const errors = [];
 
         for (let i = 0; i < n; i++) {
           const workerId = uuidv4();
-          workers.set(workerId, { id: workerId, busy: false });
-          successCount++;
+          try {
+            const worker = new WorkerInstance(workerId);
+            await worker.launch();
+            workers.set(workerId, worker);
+            successCount++;
+          } catch (err) {
+            errors.push(`worker ${workerId.slice(0, 8)}: ${err.message}`);
+          }
+        }
+
+        if (successCount === 0) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({
+            error: errors[0] || 'Khong the khoi tao worker moi'
+          }));
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
           success: true,
           added: successCount,
-          total: workers.size
+          total: workers.size,
+          warning: errors.length ? errors.join(' | ') : undefined
         }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -490,17 +504,18 @@ export async function handleAdminWorkers(req, res, workers) {
       try {
         const { count = 1 } = JSON.parse(body);
         const availableWorkers = Array.from(workers.values()).filter(w => !w.busy);
-        const toRemove = Math.min(count, availableWorkers.length);
+        const toRemove = Math.min(Math.max(1, Number(count) || 1), availableWorkers.length);
         let removedCount = 0;
+        const errors = [];
         
         for (let i = 0; i < toRemove; i++) {
           const worker = availableWorkers[i];
           try {
-            // Note: We can't close individual browser instances easily
-            // For now, just remove from pool
+            await worker.destroy();
             workers.delete(worker.id.toString());
             removedCount++;
           } catch (err) {
+            errors.push(`worker ${worker.id.toString().slice(0, 8)}: ${err.message}`);
             console.error(`Failed to remove worker ${worker.id.toString()}:`, err.message);
           }
         }
@@ -509,7 +524,8 @@ export async function handleAdminWorkers(req, res, workers) {
         res.end(JSON.stringify({ 
           success: true, 
           removed: removedCount,
-          total: workers.size 
+          total: workers.size,
+          warning: errors.length ? errors.join(' | ') : undefined
         }));
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });

@@ -94,8 +94,19 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
 
   const flash = (msg: string) => {
     setSuccess(msg);
-    setTimeout(() => setSuccess(null), 4000);
   };
+
+  useEffect(() => {
+    if (!success) return;
+    const id = window.setTimeout(() => setSuccess(null), 4000);
+    return () => window.clearTimeout(id);
+  }, [success]);
+
+  useEffect(() => {
+    if (!error) return;
+    const id = window.setTimeout(() => setError(null), 7000);
+    return () => window.clearTimeout(id);
+  }, [error]);
 
   /* ── Fetch all ─────────────────────────────────────────────────── */
   const fetchData = useCallback(async (isInitial = false) => {
@@ -256,6 +267,33 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
       {/* Top progress */}
       <div className="admin-progress" data-active={busy ? 'true' : 'false'} role="progressbar" aria-hidden={!busy} aria-busy={busy} />
 
+      <div role="region" aria-label="Thông báo hệ thống" aria-live="polite" className="admin-toast-stack">
+        {error && (
+          <div role="alert" className="admin-toast admin-toast-error">
+            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-xs uppercase tracking-wide mb-1">Có lỗi</p>
+              <p className="whitespace-pre-wrap break-words text-sm">{error}</p>
+            </div>
+            <button className="admin-icon-btn shrink-0" aria-label="Đóng" onClick={() => setError(null)}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        {success && (
+          <div role="status" className="admin-toast admin-toast-success">
+            <Radio className="h-4 w-4 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-xs uppercase tracking-wide mb-1">Thành công</p>
+              <p className="text-sm">{success}</p>
+            </div>
+            <button className="admin-icon-btn shrink-0" aria-label="Đóng" onClick={() => setSuccess(null)}>
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="admin-shell">
         {/* Sidebar */}
         <aside className="admin-sidebar hidden lg:flex" style={{ width: 'var(--sidebar-w)' }}>
@@ -339,34 +377,6 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
 
           <div className="flex-1 overflow-auto">
             <div style={{ maxWidth: '960px', margin: '0 auto', padding: '24px 20px' }} className="space-y-5">
-            {/* Alerts */}
-            <div role="region" aria-label="Thông báo hệ thống" aria-live="polite" className="space-y-2">
-              {error && (
-                <div role="alert" className="admin-alert-error">
-                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-xs uppercase tracking-wide mb-1">Có lỗi</p>
-                    <p className="whitespace-pre-wrap break-words text-sm">{error}</p>
-                  </div>
-                  <button className="admin-icon-btn shrink-0" aria-label="Đóng" onClick={() => setError(null)}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-              {success && (
-                <div role="status" className="admin-alert-success">
-                  <Radio className="h-4 w-4 shrink-0 mt-0.5" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-xs uppercase tracking-wide mb-1">Thành công</p>
-                    <p className="text-sm">{success}</p>
-                  </div>
-                  <button className="admin-icon-btn shrink-0" aria-label="Đóng" onClick={() => setSuccess(null)}>
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-
             {/* Tab content */}
             <div className="admin-card p-6 min-h-[400px]">
               {activeTab === 'overview' && (

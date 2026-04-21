@@ -1,4 +1,5 @@
 'use client';
+
 import { Plus, Trash2, Loader2, Inbox, Users, Monitor } from 'lucide-react';
 import type { Worker } from './types';
 
@@ -15,8 +16,15 @@ interface Props {
 }
 
 export default function TabWorkers({
-  workers, browserRunning, addingWorker, removingWorker, browserAction,
-  onAdd, onRemove, onShowBrowser, onHideBrowser,
+  workers,
+  browserRunning,
+  addingWorker,
+  removingWorker,
+  browserAction,
+  onAdd,
+  onRemove,
+  onShowBrowser,
+  onHideBrowser,
 }: Props) {
   const idle = workers.filter(w => !w.busy).length;
   const busy = workers.filter(w => w.busy).length;
@@ -25,10 +33,9 @@ export default function TabWorkers({
     <div className="space-y-6">
       <div>
         <p className="admin-section-title"><Users className="h-4 w-4" />Quản lý Workers</p>
-        <p className="admin-section-desc">Mỗi worker = một tab ChatGPT trong Puppeteer</p>
+        <p className="admin-section-desc">Mỗi worker tương ứng một tab ChatGPT trong Puppeteer</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Tổng', value: workers.length, color: 'var(--c-text)' },
@@ -42,14 +49,13 @@ export default function TabWorkers({
         ))}
       </div>
 
-      {/* Browser control */}
       <div className="admin-panel flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <p className="admin-section-title"><Monitor className="h-4 w-4" />Cửa sổ Puppeteer</p>
           <div className="flex items-center gap-2 mt-1.5">
             <span className={`admin-dot ${browserRunning ? 'admin-dot-success' : 'admin-dot-neutral'}`} />
             <span className="text-xs" style={{ color: 'var(--c-text-3)' }}>
-              {browserRunning ? 'Browser đang mở' : 'Chưa báo / đã đóng'}
+              {browserRunning ? 'Browser đang mở' : 'Chưa báo hoặc đã đóng'}
             </span>
           </div>
         </div>
@@ -75,21 +81,28 @@ export default function TabWorkers({
         </div>
       </div>
 
-      {/* Controls */}
       <div className="flex gap-2">
-        <button className="admin-btn-primary" onClick={onAdd} disabled={addingWorker} aria-busy={addingWorker}
-          style={{ background: 'var(--c-success)' }}>
+        <button
+          className="admin-btn-primary"
+          onClick={onAdd}
+          disabled={addingWorker}
+          aria-busy={addingWorker}
+          style={{ background: 'var(--c-success)' }}
+        >
           {addingWorker ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-          {addingWorker ? 'Đang thêm…' : 'Thêm worker'}
+          {addingWorker ? 'Đang thêm...' : 'Thêm worker'}
         </button>
-        <button className="admin-btn-danger" onClick={onRemove}
-          disabled={idle === 0 || removingWorker} aria-busy={removingWorker}>
+        <button
+          className="admin-btn-danger"
+          onClick={onRemove}
+          disabled={idle === 0 || removingWorker}
+          aria-busy={removingWorker}
+        >
           {removingWorker ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          {removingWorker ? 'Đang gỡ…' : 'Gỡ worker rảnh'}
+          {removingWorker ? 'Đang gỡ...' : 'Gỡ worker rảnh'}
         </button>
       </div>
 
-      {/* Worker list */}
       <div>
         <p className="text-xs font-semibold mb-3" style={{ color: 'var(--c-text-3)' }}>
           DANH SÁCH WORKERS ({workers.length})
@@ -98,7 +111,9 @@ export default function TabWorkers({
           <div className="admin-empty">
             <Inbox className="h-9 w-9 mb-3" style={{ color: 'var(--c-text-4)' }} />
             <p className="text-sm font-semibold" style={{ color: 'var(--c-text-2)' }}>Không có worker trong pool</p>
-            <p className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>Kiểm tra be-bridge đã khởi động thành công.</p>
+            <p className="text-xs mt-1" style={{ color: 'var(--c-text-3)' }}>
+              Kiểm tra be-bridge đã khởi động thành công.
+            </p>
           </div>
         ) : (
           <div className="space-y-2">

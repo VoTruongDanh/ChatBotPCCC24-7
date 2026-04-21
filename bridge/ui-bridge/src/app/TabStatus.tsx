@@ -1,4 +1,5 @@
 'use client';
+
 import { RefreshCw, Activity } from 'lucide-react';
 import type { SystemStatus } from './types';
 import { formatBytes, formatUptime, memPct } from './utils';
@@ -9,10 +10,10 @@ interface Props {
 }
 
 function ProgressBar({ pct, color = 'var(--c-accent)' }: { pct: number; color?: string }) {
-  const c = pct > 85 ? 'var(--c-danger)' : pct > 65 ? 'var(--c-warn)' : color;
+  const resolvedColor = pct > 85 ? 'var(--c-danger)' : pct > 65 ? 'var(--c-warn)' : color;
   return (
     <div className="admin-progress-bar">
-      <div className="admin-progress-bar-fill" style={{ width: `${pct}%`, background: c }} />
+      <div className="admin-progress-bar-fill" style={{ width: `${pct}%`, background: resolvedColor }} />
     </div>
   );
 }
@@ -34,7 +35,7 @@ export default function TabStatus({ status, onRefresh }: Props) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
         <p className="text-sm font-semibold" style={{ color: 'var(--c-text-2)' }}>Chưa có dữ liệu trạng thái</p>
-        <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>Kiểm tra kết nối tới be-bridge và Admin API Key.</p>
+        <p className="text-xs" style={{ color: 'var(--c-text-3)' }}>Kiểm tra kết nối tới be-bridge và phiên admin.</p>
         <button className="admin-btn-secondary" onClick={onRefresh}>
           <RefreshCw className="h-4 w-4" /> Thử lại
         </button>
@@ -44,7 +45,7 @@ export default function TabStatus({ status, onRefresh }: Props) {
 
   const { system, bridge, admin } = status;
   const heapPct = memPct(system.memory.heapUsed, system.memory.heapTotal);
-  const rssPct  = memPct(system.memory.rss, system.memory.rss + system.memory.external + 50 * 1024 * 1024);
+  const rssPct = memPct(system.memory.rss, system.memory.rss + system.memory.external + 50 * 1024 * 1024);
   const workerBusyPct = bridge.workers.total ? Math.round((bridge.workers.busy / bridge.workers.total) * 100) : 0;
 
   return (
@@ -55,32 +56,29 @@ export default function TabStatus({ status, onRefresh }: Props) {
       </div>
 
       <div className="grid gap-5 md:grid-cols-2">
-        {/* System info */}
         <div className="admin-panel">
           <p className="text-xs font-semibold mb-3" style={{ color: 'var(--c-text-3)' }}>HỆ THỐNG</p>
           <div>
-            <StatRow label="Uptime"    value={formatUptime(system.uptime)} />
-            <StatRow label="Platform"  value={system.platform} />
-            <StatRow label="Node.js"   value={system.nodeVersion} />
-            <StatRow label="RSS"       value={formatBytes(system.memory.rss)} />
+            <StatRow label="Uptime" value={formatUptime(system.uptime)} />
+            <StatRow label="Platform" value={system.platform} />
+            <StatRow label="Node.js" value={system.nodeVersion} />
+            <StatRow label="RSS" value={formatBytes(system.memory.rss)} />
             <StatRow label="Heap used" value={formatBytes(system.memory.heapUsed)} sub={`/ ${formatBytes(system.memory.heapTotal)}`} />
-            <StatRow label="External"  value={formatBytes(system.memory.external)} />
+            <StatRow label="External" value={formatBytes(system.memory.external)} />
           </div>
         </div>
 
-        {/* Bridge info */}
         <div className="admin-panel">
           <p className="text-xs font-semibold mb-3" style={{ color: 'var(--c-text-3)' }}>BRIDGE</p>
           <div>
-            <StatRow label="Listen"      value={`${bridge.host}:${bridge.port}`} />
-            <StatRow label="Browser"     value={bridge.config.preferredBrowser} />
-            <StatRow label="Ẩn cửa sổ"  value={bridge.config.hideWindow ? 'Có' : 'Không'} />
-            <StatRow label="API Keys"    value={`${admin.activeKeys} active / ${admin.keysCount} total`} />
+            <StatRow label="Listen" value={`${bridge.host}:${bridge.port}`} />
+            <StatRow label="Browser" value={bridge.config.preferredBrowser} />
+            <StatRow label="Ẩn cửa sổ" value={bridge.config.hideWindow ? 'Có' : 'Không'} />
+            <StatRow label="API Keys" value={`${admin.activeKeys} active / ${admin.keysCount} total`} />
           </div>
         </div>
       </div>
 
-      {/* Memory bars */}
       <div className="admin-panel space-y-5">
         <p className="text-xs font-semibold" style={{ color: 'var(--c-text-3)' }}>BỘ NHỚ</p>
 
@@ -105,15 +103,14 @@ export default function TabStatus({ status, onRefresh }: Props) {
         </div>
       </div>
 
-      {/* Worker gauges */}
       <div className="admin-panel space-y-5">
         <p className="text-xs font-semibold" style={{ color: 'var(--c-text-3)' }}>WORKERS</p>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
           {[
-            { label: 'Tổng',       value: bridge.workers.total,      color: 'var(--c-text)' },
-            { label: 'Sẵn sàng',   value: bridge.workers.available,  color: 'var(--c-success)' },
-            { label: 'Bận',        value: bridge.workers.busy,       color: 'var(--c-warn)' },
+            { label: 'Tổng', value: bridge.workers.total, color: 'var(--c-text)' },
+            { label: 'Sẵn sàng', value: bridge.workers.available, color: 'var(--c-success)' },
+            { label: 'Bận', value: bridge.workers.busy, color: 'var(--c-warn)' },
             { label: 'Generating', value: bridge.workers.generating, color: 'var(--c-danger)' },
           ].map(({ label, value, color }) => (
             <div key={label} className="admin-metric items-center">
