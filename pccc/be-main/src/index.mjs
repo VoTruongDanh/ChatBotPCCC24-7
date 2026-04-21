@@ -44,7 +44,10 @@ function getBridgeApiKey() {
   } catch { return process.env.BRIDGE_API_KEY || ''; }
 }
 
-const fastify = Fastify({ logger: true });
+const fastify = Fastify({ 
+  logger: true,
+  bodyLimit: 10 * 1024 * 1024 // 10MB để hỗ trợ ảnh base64
+});
 
 // CORS
 await fastify.register(cors, { origin: '*' });

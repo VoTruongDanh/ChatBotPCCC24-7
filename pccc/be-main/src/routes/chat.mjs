@@ -10,6 +10,24 @@ export default async function chatRoutes(fastify, options) {
     return headers;
   };
 
+  const mapBridgeErrorToUserMessage = (bridgeError) => {
+    const raw = typeof bridgeError === 'string' ? bridgeError : String(bridgeError || '');
+    const lower = raw.toLowerCase();
+
+    if (!raw) return 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại.';
+
+    // Keep upload/network error detail so frontend can show exact reason.
+    if (lower.includes('files.oaiusercontent.com') || lower.includes('failed upload') || lower.includes('upload ảnh')) {
+      return raw;
+    }
+
+    if (lower.includes('timeout') || lower.includes('không phản hồi')) {
+      return 'ChatGPT đang bận, vui lòng thử lại sau ít phút.';
+    }
+
+    return 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại.';
+  };
+
   // POST /api/chat - Non-streaming
   fastify.post('/chat', async (request, reply) => {
     const { prompt, messages, sessionId } = request.body || {};
@@ -40,21 +58,19 @@ export default async function chatRoutes(fastify, options) {
 
   // POST /api/chat/stream - SSE streaming
   fastify.post('/chat/stream', async (request, reply) => {
-    const { prompt, messages, sessionId } = request.body || {};
+    const { prompt, messages, sessionId, image } = request.body || {};
 
     if (!prompt && (!messages || messages.length === 0)) {
       return reply.status(400).send({ error: 'Thiếu prompt hoặc messages' });
     }
 
-    // Log request để debug
-    const promptPreview = prompt ? prompt.slice(0, 100) : messages?.map(m => m.content).join(' ').slice(0, 100);
-    fastify.log.info(`[chat/stream] New request - sessionId: ${sessionId?.slice(0, 8)}, prompt: ${promptPreview}...`);
+    const promptPreview = prompt ? prompt.slice(0, 100) : messages?.map((m) => m.content).join(' ').slice(0, 100);
+    fastify.log.info(`[chat/stream] New request - sessionId: ${sessionId?.slice(0, 8)}, prompt: ${promptPreview}...${image ? ' [with image]' : ''}`);
 
-    // SSE headers
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      Connection: 'keep-alive',
       'Access-Control-Allow-Origin': '*'
     });
 
@@ -67,7 +83,7 @@ export default async function chatRoutes(fastify, options) {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
         headers: getHeaders(sessionId),
-        body: JSON.stringify({ prompt, rules, sessionId })
+        body: JSON.stringify({ prompt, rules, sessionId, image })
       });
 
       if (!response.ok) {
@@ -84,24 +100,26 @@ export default async function chatRoutes(fastify, options) {
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
-
-        // Parse và filter error messages kỹ thuật
         const lines = chunk.split('\n');
+
         for (const line of lines) {
-          if (!line.startsWith('data: ')) { reply.raw.write(line + '\n'); continue; }
+          if (!line.startsWith('data: ')) {
+            reply.raw.write(line + '\n');
+            continue;
+          }
+
           try {
             const data = JSON.parse(line.slice(6));
             if (data.error) {
-              // Log kỹ thuật cho admin, trả về message thân thiện cho user
-              fastify.log.warn('[bridge-error]', data.error);
-              const userMsg = data.error.includes('Timeout') || data.error.includes('không phản hồi')
-                ? 'ChatGPT đang bận, vui lòng thử lại sau ít phút.'
-                : 'Trợ lý AI tạm thời không khả dụng. Vui lòng thử lại.';
+              fastify.log.warn({ bridgeError: data.error }, '[bridge-error]');
+              const userMsg = mapBridgeErrorToUserMessage(data.error);
               reply.raw.write(`data: ${JSON.stringify({ error: userMsg })}\n\n`);
             } else {
               reply.raw.write(line + '\n');
             }
-          } catch { reply.raw.write(line + '\n'); }
+          } catch {
+            reply.raw.write(line + '\n');
+          }
         }
       }
 
@@ -116,7 +134,7 @@ export default async function chatRoutes(fastify, options) {
   // POST /api/reset - Reset chat session
   fastify.post('/reset', async (request, reply) => {
     const { sessionId } = request.body || {};
-    
+
     try {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/reset-temp-chat`, {
         method: 'POST',

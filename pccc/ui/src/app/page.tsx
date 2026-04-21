@@ -291,12 +291,16 @@ function Bubble({ msg, index }: { msg: Message; index: number }) {
 /* ══════════════════════════════════════════════
    INPUT COMPONENT
 ══════════════════════════════════════════════ */
-function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
+function ChatInput({ input, loading, connectionStatus, onSubmit, onChange, onImageSelect, selectedImage, onRemoveImage, fileInputRef }: {
   input: string;
   loading: boolean;
   connectionStatus: ConnectionStatus;
   onSubmit: (e: React.FormEvent) => void;
   onChange: (v: string) => void;
+  onImageSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  selectedImage: string | null;
+  onRemoveImage: () => void;
+  fileInputRef: React.RefObject<HTMLInputElement>;
 }) {
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -327,6 +331,36 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
           </div>
         )}
       </div>
+      
+      {selectedImage && (
+        <div style={{ padding: '8px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <img src={selectedImage} alt="Preview" style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '8px' }} />
+            <button
+              type="button"
+              onClick={onRemoveImage}
+              style={{
+                position: 'absolute',
+                top: '4px',
+                right: '4px',
+                background: 'rgba(0,0,0,0.7)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '24px',
+                height: '24px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
+      
       <form onSubmit={handleSubmit} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <input
           ref={inputRef}
@@ -361,18 +395,20 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange }: {
       </form>
       <div className="pccc-input-footer">
         <div className="pccc-input-actions">
-          <button type="button" className="pccc-action-chip">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={onImageSelect}
+            style={{ display: 'none' }}
+          />
+          <button type="button" className="pccc-action-chip" onClick={() => fileInputRef.current?.click()}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
             </svg>
-            Đính kèm
-          </button>
-          <button type="button" className="pccc-action-chip">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/>
-              <line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/>
-            </svg>
-            Giọng nói
+            Đính ảnh
           </button>
         </div>
         <span className="pccc-char">{input.length}/3,000</span>
@@ -396,7 +432,9 @@ export default function ChatPage() {
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
   const [waitingStatus, setWaitingStatus] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const title1 = useScramble('Tư Vấn PCCC', 300);
   const title2 = useScramble('Thông Minh', 900);
 
@@ -457,11 +495,19 @@ export default function ChatPage() {
       const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ prompt: savedInput, sessionId }),
+        body: JSON.stringify({ 
+          prompt: savedInput, 
+          sessionId,
+          image: selectedImage // Gửi base64 image
+        }),
       });
       
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
       if (!response.body) throw new Error('No response body');
+      
+      // Clear image after sending
+      setSelectedImage(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
       
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -519,7 +565,7 @@ export default function ChatPage() {
       setLoading(false); 
       setWaitingStatus(null);
     }
-  }, [input, loading, connectionStatus, sessionId]);
+  }, [input, loading, connectionStatus, sessionId, selectedImage]);
 
   const resetChat = useCallback(async () => {
     if (loading) return;
@@ -531,6 +577,7 @@ export default function ChatPage() {
       });
       setMessages([]);
       setInput('');
+      setSelectedImage(null);
       // Tạo sessionId mới
       setSessionId(self.crypto?.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36));
       showToastMessage('Đã bắt đầu cuộc trò chuyện mới', 'success');
@@ -538,6 +585,33 @@ export default function ChatPage() {
       showToastMessage('Không thể reset chat', 'error');
     }
   }, [loading, sessionId]);
+
+  const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      showToastMessage('Vui lòng chọn file ảnh', 'error');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      showToastMessage('Ảnh quá lớn (tối đa 5MB)', 'error');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setSelectedImage(e.target?.result as string);
+      showToastMessage('Đã chọn ảnh', 'success');
+    };
+    reader.readAsDataURL(file);
+  }, []);
+
+  const removeImage = useCallback(() => {
+    setSelectedImage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
 
   if (!mounted) return null;
 
@@ -1303,7 +1377,17 @@ export default function ChatPage() {
                 ))}
               </div>
               <div className="pccc-hero-input">
-                <ChatInput input={input} loading={loading} connectionStatus={connectionStatus} onSubmit={sendMessage} onChange={setInput} />
+                <ChatInput 
+                  input={input} 
+                  loading={loading} 
+                  connectionStatus={connectionStatus} 
+                  onSubmit={sendMessage} 
+                  onChange={setInput}
+                  onImageSelect={handleImageSelect}
+                  selectedImage={selectedImage}
+                  onRemoveImage={removeImage}
+                  fileInputRef={fileInputRef}
+                />
               </div>
             </div>
           ) : (
@@ -1317,7 +1401,17 @@ export default function ChatPage() {
               </div>
               <div className="pccc-bottom">
                 <div className="pccc-bottom-inner">
-                  <ChatInput input={input} loading={loading} connectionStatus={connectionStatus} onSubmit={sendMessage} onChange={setInput} />
+                  <ChatInput 
+                    input={input} 
+                    loading={loading} 
+                    connectionStatus={connectionStatus} 
+                    onSubmit={sendMessage} 
+                    onChange={setInput}
+                    onImageSelect={handleImageSelect}
+                    selectedImage={selectedImage}
+                    onRemoveImage={removeImage}
+                    fileInputRef={fileInputRef}
+                  />
                 </div>
               </div>
             </>
@@ -1342,7 +1436,6 @@ export default function ChatPage() {
     </>
   );
 }
-
 
 
 

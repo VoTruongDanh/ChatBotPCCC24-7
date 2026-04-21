@@ -89,7 +89,7 @@ async function processQueue() {
     if (req.onDelta) req.onDelta('🔄 Đang xử lý...');
 
     try {
-      const result = await worker.sendPromptAndWaitResponse(req.text, req.onDelta);
+      const result = await worker.sendPromptAndWaitResponse(req.text, req.onDelta, req.imageDataUrl);
       req.resolve({ response: result, workerId: worker.id });
     } catch (err) {
       console.error(`[Worker ${worker.id}] Lỗi:`, err.message);
@@ -118,7 +118,7 @@ function dispatch(payload) {
 
     worker.busy = true;
     
-    worker.sendPromptAndWaitResponse(payload.text, payload.onDelta)
+    worker.sendPromptAndWaitResponse(payload.text, payload.onDelta, payload.imageDataUrl)
       .then(result => resolve({ response: result, workerId: worker.id }))
       .catch(async err => {
         console.error(`[Worker ${worker.id}] Lỗi:`, err.message);
@@ -145,7 +145,7 @@ function getSessionHistory(sessionId) {
   return sessionHistory.get(sessionId);
 }
 
-function buildPromptWithHistory(rules, history, userMessage) {
+function buildPromptWithHistory(rules, history, userMessage, hasImage = false) {
   console.log(`[buildPrompt] History length: ${history.length}`);
   if (history.length > 0) {
     console.log(`[buildPrompt] Last history item:`, history[history.length - 1]);
@@ -153,6 +153,12 @@ function buildPromptWithHistory(rules, history, userMessage) {
   console.log(`[buildPrompt] User message:`, userMessage.slice(0, 50));
   
   let text = '';
+
+  // Với câu hỏi kèm ảnh, tránh nhồi full history/rules vào cùng 1 message
+  // để ChatGPT tập trung vào phần vision + câu hỏi user.
+  if (hasImage) {
+    return userMessage;
+  }
   
   // Rules (chỉ lần đầu)
   if (rules && rules.length > 0 && history.length === 0) {
@@ -176,6 +182,44 @@ function buildPromptWithHistory(rules, history, userMessage) {
   text += `User: ${userMessage}\n\nAssistant:`;
   
   console.log(`[buildPrompt] Final prompt length: ${text.length}`);
+  return text;
+}
+
+function buildFocusedPromptWithHistory(rules, history, userMessage, hasImage = false) {
+  console.log(`[buildFocusedPrompt] History length: ${history.length}`);
+  if (history.length > 0) {
+    console.log(`[buildFocusedPrompt] Last history item:`, history[history.length - 1]);
+  }
+  console.log(`[buildFocusedPrompt] User message:`, userMessage.slice(0, 50));
+
+  if (hasImage) {
+    return userMessage;
+  }
+
+  let text = '';
+  const recentHistory = history.slice(-6);
+
+  if (rules && rules.length > 0) {
+    text += buildPrompt(rules, '');
+    text += '\n\n';
+  }
+
+  text += '=== NGUYEN TAC HOI THOAI ===\n';
+  text += 'Chi dung lich su de giu mach trao doi trong pham vi PCCC.\n';
+  text += 'Neu lich su hoac cau hoi lech sang chu de ngoai PCCC, tu choi ngan gon va dua hoi thoai quay lai PCCC.\n';
+  text += 'Neu nguoi dung noi ve tinh huong chay no, nguy hiem, de doa, uu tien huong dan an toan, so tan va goi 114.\n\n';
+
+  if (recentHistory.length > 0) {
+    text += '=== LICH SU GAN DAY ===\n';
+    for (const msg of recentHistory) {
+      text += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n\n`;
+    }
+  }
+
+  text += '=== YEU CAU HIEN TAI ===\n';
+  text += `User: ${userMessage}\n\nAssistant:`;
+
+  console.log(`[buildFocusedPrompt] Final prompt length: ${text.length}`);
   return text;
 }
 
@@ -235,19 +279,19 @@ async function handleChatStream(req, res) {
   req.on('data', chunk => body += chunk);
   req.on('end', async () => {
     try {
-      const { prompt, messages, rules, sessionId } = JSON.parse(body);
+      const { prompt, messages, rules, sessionId, image } = JSON.parse(body);
       
       const history = getSessionHistory(sessionId);
       const userMessage = prompt || (messages && messages[messages.length - 1]?.content);
       
-      console.log(`[Session ${sessionId?.slice(0, 8)}] History length: ${history.length}, User: ${userMessage?.slice(0, 50)}`);
+      console.log(`[Session ${sessionId?.slice(0, 8)}] History length: ${history.length}, User: ${userMessage?.slice(0, 50)}${image ? ' [with image]' : ''}`);
       
       if (!userMessage) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
       }
       
-      const text = buildPromptWithHistory(rules, history, userMessage);
+      const text = buildFocusedPromptWithHistory(rules, history, userMessage, Boolean(image));
 
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
@@ -259,6 +303,7 @@ async function handleChatStream(req, res) {
       try {
         const result = await dispatch({
           text,
+          imageDataUrl: image,
           onDelta: (delta, status) => {
             if (status) {
               res.write(`data: ${JSON.stringify({ status })}\n\n`);
