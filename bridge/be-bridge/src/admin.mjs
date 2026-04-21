@@ -448,9 +448,9 @@ export async function handleAdminWorkers(req, res, workers) {
   
   if (req.method === 'GET') {
     const workerList = Array.from(workers.values()).map(w => ({
-      id: w.id,
+      id: w.id !== undefined ? w.id.toString() : 'unknown',
       busy: w.busy,
-      lastActivity: w.lastActivity || null
+      lastActivity: w.lastActivity || w.lastActive || null
     }));
     
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -498,10 +498,10 @@ export async function handleAdminWorkers(req, res, workers) {
           try {
             // Note: We can't close individual browser instances easily
             // For now, just remove from pool
-            workers.delete(worker.id);
+            workers.delete(worker.id.toString());
             removedCount++;
           } catch (err) {
-            console.error(`Failed to remove worker ${worker.id}:`, err.message);
+            console.error(`Failed to remove worker ${worker.id.toString()}:`, err.message);
           }
         }
         

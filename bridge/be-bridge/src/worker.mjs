@@ -26,7 +26,7 @@ puppeteerExtra.use(StealthPlugin());
 
 export class WorkerInstance {
   constructor(id) {
-    this.id = id;
+    this.id = id.toString();
     this.browser = null;
     this.page = null;
     this.busy = false;

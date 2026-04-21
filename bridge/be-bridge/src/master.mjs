@@ -8,7 +8,7 @@ config({ path: join(__dirname, '..', '.env') });
 import http from 'node:http';
 import { URL } from 'node:url';
 import { HOST, PORT, NUM_WORKERS, getExecutable, PREFERRED_BROWSER } from './config.mjs';
-import { WorkerInstance, closeBrowser } from './worker.mjs';
+import { WorkerInstance } from './worker.mjs';
 import { buildPrompt } from './prompt-builder.mjs';
 import { validateApiKey, sendUnauthorized, isAuthConfigured, registerKeyStore } from './auth.mjs';
 import { 
@@ -16,22 +16,31 @@ import {
   handleAdminKeys, 
   handleAdminKeyDetail, 
   handleAdminStatus, 
-  handleAdminWorkers, handleAdminBrowser,
-  handleAdminLogin, handleAdminLogout,
+  handleAdminWorkers, 
+  handleAdminBrowser,
+  handleAdminLogin, 
+  handleAdminLogout,
   getAdminKeys
 } from './admin.mjs';
 
 registerKeyStore(getAdminKeys);
 
 // ============================================
-// WORKER POOL
+// STATE
 // ============================================
 
 const workerPool = new Map();
-const sessionMap = new Map();
+const sessionHistory = new Map();
+const sessionLastActive = new Map();
+const requestQueue = [];
+let isProcessing = false;
+
+// ============================================
+// WORKER POOL
+// ============================================
 
 async function initWorkerPool() {
-  console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers với browser riêng...`);
+  console.log(`[Master] Khởi tạo ${NUM_WORKERS} workers...`);
 
   const executable = getExecutable();
   if (!executable) {
@@ -44,9 +53,9 @@ async function initWorkerPool() {
     try {
       const worker = new WorkerInstance(i);
       await worker.launch();
-      workerPool.set(i, worker);
+      workerPool.set(i.toString(), worker);
       successCount++;
-      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng: worker-${i}`);
+      console.log(`[Master] Worker ${i + 1}/${NUM_WORKERS} sẵn sàng`);
     } catch (err) {
       console.error(`[Master] Lỗi worker ${i + 1}:`, err.message);
     }
@@ -59,38 +68,25 @@ async function initWorkerPool() {
   console.log(`[Master] Đã khởi tạo ${successCount}/${NUM_WORKERS} workers`);
 }
 
-function findWorker(sessionId) {
-  if (sessionId && sessionMap.has(sessionId)) {
-    const wId = sessionMap.get(sessionId);
-    const w = workerPool.get(wId);
-    if (w && !w.busy) return w;
-  }
+function findWorker() {
   for (const w of workerPool.values()) {
     if (!w.busy) return w;
   }
   return null;
 }
 
-// Queue và retry
-const requestQueue = [];
-let isProcessing = false;
-
 async function processQueue() {
   if (isProcessing || requestQueue.length === 0) return;
   isProcessing = true;
 
   while (requestQueue.length > 0) {
-    const worker = findWorker(null);
+    const worker = findWorker();
     if (!worker) break;
 
     const req = requestQueue.shift();
     worker.busy = true;
-    if (req.sessionId) sessionMap.set(req.sessionId, worker.id);
 
-    // Gửi thông báo đang xử lý
-    if (req.onDelta) {
-      req.onDelta('🔄 Đang xử lý...');
-    }
+    if (req.onDelta) req.onDelta('🔄 Đang xử lý...');
 
     try {
       const result = await worker.sendPromptAndWaitResponse(req.text, req.onDelta);
@@ -102,51 +98,199 @@ async function processQueue() {
     } finally {
       worker.busy = false;
       worker.lastActive = Date.now();
-      processQueue();
     }
   }
 
   isProcessing = false;
+  if (requestQueue.length > 0) setTimeout(() => processQueue(), 1000);
 }
 
-function dispatch(payload, sessionId) {
+function dispatch(payload) {
   return new Promise((resolve, reject) => {
-    // Thử lấy worker ngay
-    const worker = findWorker(sessionId);
-    if (worker) {
-      worker.busy = true;
-      if (sessionId) sessionMap.set(sessionId, worker.id);
-
-      worker.sendPromptAndWaitResponse(payload.text, payload.onDelta)
-        .then(result => resolve({ response: result, workerId: worker.id }))
-        .catch(async err => {
-          console.error(`[Worker ${worker.id}] Lỗi:`, err.message);
-          await worker.restart();
-          reject(err);
-        })
-        .finally(() => {
-          worker.busy = false;
-          worker.lastActive = Date.now();
-          processQueue();
-        });
+    const worker = findWorker();
+    
+    if (!worker) {
+      if (payload.onDelta) payload.onDelta(null, '⏳ Đang chờ worker rảnh...');
+      requestQueue.push({ ...payload, resolve, reject });
+      setTimeout(() => processQueue(), 1000);
       return;
     }
 
-    // Không có worker rảnh - vào queue và thông báo
-    if (payload.onDelta) {
-      payload.onDelta(`⏳ Đang chờ... (${requestQueue.length + 1} người trong hàng đợi)`);
+    worker.busy = true;
+    worker.sendPromptAndWaitResponse(payload.text, payload.onDelta)
+      .then(result => resolve({ response: result, workerId: worker.id }))
+      .catch(async err => {
+        console.error(`[Worker ${worker.id}] Lỗi:`, err.message);
+        await worker.restart();
+        reject(err);
+      })
+      .finally(() => {
+        worker.busy = false;
+        worker.lastActive = Date.now();
+        processQueue();
+      });
+  });
+}
+
+// ============================================
+// SESSION MANAGEMENT
+// ============================================
+
+function getSessionHistory(sessionId) {
+  if (!sessionHistory.has(sessionId)) {
+    sessionHistory.set(sessionId, []);
+  }
+  sessionLastActive.set(sessionId, Date.now());
+  return sessionHistory.get(sessionId);
+}
+
+function buildPromptWithHistory(rules, history, userMessage) {
+  let text = '';
+  
+  // System prompt
+  if (rules && rules.length > 0) {
+    text = buildPrompt(rules, '');
+    text += '\n\n';
+  }
+  
+  // Conversation format
+  if (history.length > 0) {
+    text += 'Đây là cuộc trò chuyện đang diễn ra. Hãy tiếp tục dựa trên ngữ cảnh:\n\n';
+    for (const msg of history) {
+      if (msg.role === 'user') {
+        text += `User: ${msg.content}\n\n`;
+      } else {
+        text += `Assistant: ${msg.content}\n\n`;
+      }
     }
-    
-    requestQueue.push({ 
-      text: payload.text, 
-      onDelta: payload.onDelta, 
-      sessionId, 
-      resolve, 
-      reject 
-    });
-    
-    // Thử process sau 2 giây
-    setTimeout(() => processQueue(), 2000);
+  }
+  
+  text += `User: ${userMessage}\n\nAssistant:`;
+  return text;
+}
+
+function saveToHistory(history, userMessage, assistantResponse) {
+  history.push({ role: 'user', content: userMessage });
+  history.push({ role: 'assistant', content: assistantResponse });
+  
+  // Giới hạn 20 messages gần nhất
+  if (history.length > 20) {
+    history.splice(0, history.length - 20);
+  }
+}
+
+// Cleanup sessions cũ mỗi 30 phút
+setInterval(() => {
+  const now = Date.now();
+  const timeout = 2 * 60 * 60 * 1000; // 2 hours
+  
+  for (const [sessionId, lastActive] of sessionLastActive.entries()) {
+    if ((now - lastActive) > timeout) {
+      console.log(`[Master] Xóa session timeout: ${sessionId.slice(0, 8)}`);
+      sessionHistory.delete(sessionId);
+      sessionLastActive.delete(sessionId);
+    }
+  }
+}, 30 * 60 * 1000);
+
+// ============================================
+// HTTP HANDLERS
+// ============================================
+
+async function handleChat(req, res) {
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', async () => {
+    try {
+      const { prompt, messages } = JSON.parse(body);
+      const text = prompt || (messages && messages.map(m => m.content).join('\n'));
+
+      if (!text) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
+      }
+
+      const result = await dispatch({ text });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+  });
+}
+
+async function handleChatStream(req, res) {
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', async () => {
+    try {
+      const { prompt, messages, rules, sessionId } = JSON.parse(body);
+      
+      const history = getSessionHistory(sessionId);
+      const userMessage = prompt || (messages && messages[messages.length - 1]?.content);
+      
+      if (!userMessage) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
+      }
+      
+      const text = buildPromptWithHistory(rules, history, userMessage);
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+
+      try {
+        const result = await dispatch({
+          text,
+          onDelta: (delta, status) => {
+            if (status) {
+              res.write(`data: ${JSON.stringify({ status })}\n\n`);
+            } else if (delta) {
+              res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+            }
+          }
+        });
+
+        saveToHistory(history, userMessage, result.response);
+        res.write(`data: ${JSON.stringify({ done: true, response: result.response })}\n\n`);
+      } catch (err) {
+        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      }
+
+      res.end();
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+  });
+}
+
+async function handleResetChat(req, res) {
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', async () => {
+    try {
+      const { sessionId } = JSON.parse(body);
+      
+      if (sessionId) {
+        sessionHistory.delete(sessionId);
+        sessionLastActive.delete(sessionId);
+      } else {
+        sessionHistory.clear();
+        sessionLastActive.clear();
+      }
+      
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
   });
 }
 
@@ -179,12 +323,13 @@ const server = http.createServer(async (req, res) => {
       status: 'ok',
       workers: workerPool.size,
       available,
-      generating: [...workerPool.values()].filter(w => w.busy).length,
+      generating: workerPool.size - available,
       authEnabled: isAuthConfigured(),
       port: PORT
     }));
   }
 
+  // Admin endpoints
   if (pathname === '/admin/login' && req.method === 'POST') return handleAdminLogin(req, res);
   if (pathname === '/admin/logout' && req.method === 'POST') return handleAdminLogout(req, res);
   if (pathname === '/admin/config' && (req.method === 'GET' || req.method === 'PUT')) return handleAdminConfig(req, res);
@@ -194,6 +339,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/admin/browser' && (req.method === 'GET' || req.method === 'POST')) return handleAdminBrowser(req, res);
   if (pathname === '/admin/workers' && (req.method === 'GET' || req.method === 'POST' || req.method === 'DELETE')) return handleAdminWorkers(req, res, workerPool);
 
+  // API endpoints (require auth)
   const auth = validateApiKey(req);
   if (!auth.valid) return sendUnauthorized(res, auth.error);
 
@@ -204,109 +350,6 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not found' }));
 });
-
-// ============================================
-// HANDLERS
-// ============================================
-
-async function handleChat(req, res) {
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  req.on('end', async () => {
-    try {
-      const { prompt, messages, sessionId } = JSON.parse(body);
-      const text = prompt || (messages && messages.map(m => m.content).join('\n'));
-
-      if (!text) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
-      }
-
-      try {
-        const result = await dispatch({ text }, sessionId);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(result));
-      } catch (err) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid JSON' }));
-    }
-  });
-}
-
-async function handleChatStream(req, res) {
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  req.on('end', async () => {
-    try {
-      const { prompt, messages, rules, sessionId } = JSON.parse(body);
-      let text = prompt || (messages && messages.map(m => m.content).join('\n'));
-
-      if (!text) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
-      }
-
-      if (rules && rules.length > 0) {
-        text = buildPrompt(rules, text);
-      }
-
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-
-      try {
-        const result = await dispatch({
-          text,
-          onDelta: (delta) => {
-            if (delta) res.write(`data: ${JSON.stringify({ delta })}\n\n`);
-          }
-        }, sessionId);
-
-        res.write(`data: ${JSON.stringify({ done: true, response: result.response })}\n\n`);
-      } catch (err) {
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-      }
-
-      res.end();
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Invalid JSON' }));
-    }
-  });
-}
-
-async function handleResetChat(req, res) {
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  req.on('end', async () => {
-    try {
-      const { sessionId } = JSON.parse(body);
-      
-      if (sessionId && sessionMap.has(sessionId)) {
-        const workerId = sessionMap.get(sessionId);
-        const worker = workerPool.get(workerId);
-        if (worker) await worker.startNewTemporaryChat();
-      } else {
-        for (const worker of workerPool.values()) {
-          await worker.startNewTemporaryChat();
-        }
-      }
-      
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true }));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-  });
-}
 
 // ============================================
 // STARTUP

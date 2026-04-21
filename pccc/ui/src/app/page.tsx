@@ -395,6 +395,7 @@ export default function ChatPage() {
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
+  const [waitingStatus, setWaitingStatus] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const title1 = useScramble('Tư Vấn PCCC', 300);
   const title2 = useScramble('Thông Minh', 900);
@@ -473,7 +474,11 @@ export default function ChatPage() {
           try {
             const data = JSON.parse(t.slice(6));
             if (data.error) throw new Error(data.error);
+            if (data.status) {
+              setWaitingStatus(data.status.message);
+            }
             if (data.delta) {
+              setWaitingStatus(null);
               ac += data.delta;
               setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: ac } : m));
             }
@@ -495,6 +500,24 @@ export default function ChatPage() {
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: msg, status: 'error' } : m));
     } finally { setLoading(false); }
   }, [input, loading, connectionStatus, messages, sessionId]);
+
+  const resetChat = useCallback(async () => {
+    if (loading) return;
+    try {
+      await fetch(`${API_URL}/api/reset`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId })
+      });
+      setMessages([]);
+      setInput('');
+      // Tạo sessionId mới
+      setSessionId(self.crypto?.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36));
+      showToastMessage('Đã bắt đầu cuộc trò chuyện mới', 'success');
+    } catch (err) {
+      showToastMessage('Không thể reset chat', 'error');
+    }
+  }, [loading, sessionId]);
 
   if (!mounted) return null;
 
@@ -1185,6 +1208,20 @@ export default function ChatPage() {
             </div>
           </div>
           <div className="pccc-nav-right">
+            {messages.length > 0 && (
+              <button 
+                className="pccc-btn-ghost" 
+                onClick={resetChat}
+                disabled={loading}
+                style={{ marginRight: '8px' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                  <polyline points="1 4 1 10 7 10"></polyline>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Cuộc trò chuyện mới
+              </button>
+            )}
             {connectionStatus === 'checking' && (
               <span className="pccc-status pccc-s-check">
                 <svg className="pccc-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -1285,11 +1322,6 @@ export default function ChatPage() {
     </>
   );
 }
-
-
-
-
-
 
 
 
