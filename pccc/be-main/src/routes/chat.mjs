@@ -67,7 +67,7 @@ export default async function chatRoutes(fastify, options) {
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
         headers: getHeaders(sessionId),
-        body: JSON.stringify({ prompt, messages, rules, sessionId })
+        body: JSON.stringify({ prompt, rules, sessionId })
       });
 
       if (!response.ok) {

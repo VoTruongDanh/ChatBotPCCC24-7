@@ -146,38 +146,36 @@ function getSessionHistory(sessionId) {
 }
 
 function buildPromptWithHistory(rules, history, userMessage) {
+  console.log(`[buildPrompt] History length: ${history.length}`);
+  if (history.length > 0) {
+    console.log(`[buildPrompt] Last history item:`, history[history.length - 1]);
+  }
+  console.log(`[buildPrompt] User message:`, userMessage.slice(0, 50));
+  
   let text = '';
   
-  // System prompt cực mạnh
-  text += '⚠️ QUAN TRỌNG: Bạn đang trong cuộc trò chuyện liên tục với CÙNG MỘT người. Hãy nhớ thông tin từ lịch sử bên dưới.\n\n';
-  
-  if (rules && rules.length > 0) {
+  // Rules (chỉ lần đầu)
+  if (rules && rules.length > 0 && history.length === 0) {
     text += buildPrompt(rules, '');
     text += '\n\n';
   }
   
-  // Lịch sử với format rõ ràng
+  // Instruction với example
   if (history.length > 0) {
-    text += '📜 LỊCH SỬ CUỘC TRÒ CHUYỆN (Đọc kỹ trước khi trả lời):\n';
-    text += '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
+    text += '⚠️ CUỘC TRÒ CHUYỆN LIÊN TỤC - Đọc lịch sử:\n\n';
     
-    for (let i = 0; i < history.length; i++) {
-      const msg = history[i];
-      if (msg.role === 'user') {
-        text += `\n👤 Người dùng (tin nhắn ${i + 1}):\n${msg.content}\n`;
-      } else {
-        text += `\n🤖 Bạn đã trả lời (tin nhắn ${i + 1}):\n${msg.content}\n`;
-      }
+    // Lịch sử
+    for (const msg of history) {
+      text += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n\n`;
     }
     
-    text += '\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n';
-    text += '⚠️ Hãy dựa vào lịch sử trên để trả lời câu hỏi tiếp theo.\n';
-    text += '⚠️ KHÔNG được bịa thông tin mới nếu đã có trong lịch sử.\n\n';
+    text += '---\n';
+    text += 'Quy tắc: Trả lời dựa vào lịch sử trên. VD: Nếu user đã nói tên là "A" ở trên, khi hỏi "tôi tên gì", trả lời "A", KHÔNG phải tên khác trong câu hỏi.\n\n';
   }
   
-  text += `👤 Người dùng hỏi tiếp:\n${userMessage}\n\n`;
-  text += `🤖 Bạn trả lời (dựa vào lịch sử ở trên):`;
+  text += `User: ${userMessage}\n\nAssistant:`;
   
+  console.log(`[buildPrompt] Final prompt length: ${text.length}`);
   return text;
 }
 
@@ -242,6 +240,8 @@ async function handleChatStream(req, res) {
       const history = getSessionHistory(sessionId);
       const userMessage = prompt || (messages && messages[messages.length - 1]?.content);
       
+      console.log(`[Session ${sessionId?.slice(0, 8)}] History length: ${history.length}, User: ${userMessage?.slice(0, 50)}`);
+      
       if (!userMessage) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         return res.end(JSON.stringify({ error: 'Thiếu prompt hoặc messages' }));
@@ -269,6 +269,8 @@ async function handleChatStream(req, res) {
         });
 
         saveToHistory(history, userMessage, result.response);
+        console.log(`[Session ${sessionId?.slice(0, 8)}] Saved to history. New length: ${history.length}`);
+        
         res.write(`data: ${JSON.stringify({ done: true, response: result.response })}\n\n`);
       } catch (err) {
         res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);

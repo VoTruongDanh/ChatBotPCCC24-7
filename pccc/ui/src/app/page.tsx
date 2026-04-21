@@ -441,65 +441,85 @@ export default function ChatPage() {
   const sendMessage = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || loading || connectionStatus !== 'connected') return;
+    
     const msgId = (self.crypto?.randomUUID?.()||Math.random().toString(36).slice(2)+Date.now().toString(36));
     const userMsg: Message = { role: 'user', content: input, status: 'done', id: (self.crypto?.randomUUID?.()||Math.random().toString(36).slice(2)+Date.now().toString(36)) };
-    setMessages(prev => [...prev, userMsg]);
     const savedInput = input;
+    
+    setMessages(prev => [...prev, userMsg]);
     setInput('');
     setLoading(true);
     setMessages(prev => [...prev, { role: 'assistant', content: '', status: 'streaming', id: msgId }]);
+    
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       
       const response = await fetch(`${API_URL}/api/chat/stream`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ prompt: savedInput, messages: [...messages, userMsg], sessionId }),
+        body: JSON.stringify({ prompt: savedInput, sessionId }),
       });
+      
       if (!response.ok) throw new Error(`Server error: ${response.status}`);
       if (!response.body) throw new Error('No response body');
+      
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
-      let ac = '';
+      let accumulated = ''; // Local variable, not closure
+      
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
+        
         for (const line of lines) {
           const t = line.trim();
           if (!t?.startsWith('data: ')) continue;
+          
           try {
             const data = JSON.parse(t.slice(6));
             if (data.error) throw new Error(data.error);
+            
             if (data.status) {
               setWaitingStatus(data.status.message);
             }
+            
             if (data.delta) {
               setWaitingStatus(null);
-              ac += data.delta;
-              setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: ac } : m));
+              accumulated += data.delta;
+              const currentContent = accumulated; // Capture current value
+              setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: currentContent } : m));
             }
+            
             if (data.done && data.response) {
               setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: data.response, status: 'done' } : m));
               return;
             }
-          } catch (err) { if (err instanceof SyntaxError) continue; throw err; }
+          } catch (err) { 
+            if (err instanceof SyntaxError) continue; 
+            throw err; 
+          }
         }
       }
+      
       setMessages(prev => prev.map(m =>
-        m.id === msgId ? ac.trim()
-          ? { ...m, content: ac, status: 'done' }
+        m.id === msgId ? accumulated.trim()
+          ? { ...m, content: accumulated, status: 'done' }
           : { ...m, content: '⚠️ Không nhận được phản hồi. Vui lòng thử lại.', status: 'error' }
         : m
       ));
     } catch (err) {
       const msg = err instanceof Error ? `❌ Lỗi: ${err.message}` : '❌ Không thể kết nối server.';
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: msg, status: 'error' } : m));
-    } finally { setLoading(false); }
-  }, [input, loading, connectionStatus, messages, sessionId]);
+    } finally { 
+      setLoading(false); 
+      setWaitingStatus(null);
+    }
+  }, [input, loading, connectionStatus, sessionId]);
 
   const resetChat = useCallback(async () => {
     if (loading) return;
