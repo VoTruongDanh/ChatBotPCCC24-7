@@ -1214,7 +1214,8 @@ export default function ChatPage() {
           display: flex;
           flex-direction: column;
           gap: 6px;
-          padding-left: 18px;
+          padding-left: 26px;
+          margin-left: 4px;
           margin: 0;
           list-style: disc;
           list-style-position: outside;
@@ -1222,6 +1223,7 @@ export default function ChatPage() {
         .pccc-rich-list li {
           line-height: 1.56;
           display: list-item;
+          padding-left: 6px;
         }
         .pccc-rich-list li::marker {
           color: rgba(249,115,22,0.9);

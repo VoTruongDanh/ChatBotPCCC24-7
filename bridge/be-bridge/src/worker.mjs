@@ -111,6 +111,7 @@ export class WorkerInstance {
       throw new Error('ChatGPT yeu cau dang nhap. Tat BRIDGE_HIDE_WINDOW=false, restart, dang nhap, bat lai.');
     }
 
+    await this.ensurePageInteractive();
     console.log(`[Worker ${this.id}] ChatGPT san sang:`, currentUrl);
     if (HIDE_WINDOW) {
       await this.forceHideBrowserWindow();
@@ -146,6 +147,37 @@ export class WorkerInstance {
     });
   }
 
+  async ensurePageInteractive() {
+    if (!this.page) return;
+
+    try {
+      await this.page.bringToFront();
+    } catch {
+      // ignore
+    }
+
+    try {
+      await this.page.evaluate(() => {
+        window.focus?.();
+        const input =
+          document.querySelector('#prompt-textarea') ||
+          document.querySelector('textarea#prompt-textarea') ||
+          document.querySelector('textarea[placeholder*="Message"]') ||
+          document.querySelector('textarea[placeholder*="Send a message"]') ||
+          document.querySelector('div[contenteditable="true"]#prompt-textarea') ||
+          document.querySelector('div[contenteditable="true"]');
+
+        if (input instanceof HTMLElement) {
+          input.focus();
+        }
+      });
+    } catch {
+      // ignore
+    }
+
+    await delay(180);
+  }
+
   async forceHideBrowserWindow() {
     if (!this.browser) return;
     try {
@@ -155,7 +187,13 @@ export class WorkerInstance {
       const { windowId } = await cdp.send('Browser.getWindowForTarget');
       await cdp.send('Browser.setWindowBounds', {
         windowId,
-        bounds: { windowState: LAUNCH_MINIMIZED ? 'minimized' : 'normal' }
+        bounds: {
+          windowState: 'normal',
+          left: HIDDEN_X,
+          top: HIDDEN_Y,
+          width: 1280,
+          height: 900
+        }
       });
       await cdp.detach();
     } catch {
@@ -516,6 +554,11 @@ export class WorkerInstance {
       throw new Error('Browser chua duoc khoi tao');
     }
 
+    await this.ensurePageInteractive();
+    if (HIDE_WINDOW) {
+      await this.forceHideBrowserWindow();
+    }
+
     const input = await this.findInput();
     if (!input) {
       throw new Error('Khong tim thay input textarea hoac contenteditable');
@@ -635,6 +678,10 @@ export class WorkerInstance {
     if (!this.page) return;
     try {
       await this.page.goto(CHAT_URL, { waitUntil: 'networkidle2', timeout: 30000 });
+      await this.ensurePageInteractive();
+      if (HIDE_WINDOW) {
+        await this.forceHideBrowserWindow();
+      }
     } catch (e) {
       console.error(`[Worker ${this.id}] Loi reset chat:`, e.message);
     }
@@ -685,7 +732,10 @@ export async function hideBrowserWindow() {
   if (!pages.length) throw new Error('Khong co trang nao dang mo');
   const cdp = await pages[0].createCDPSession();
   const { windowId } = await cdp.send('Browser.getWindowForTarget');
-  await cdp.send('Browser.setWindowBounds', { windowId, bounds: { windowState: 'minimized' } });
+  await cdp.send('Browser.setWindowBounds', {
+    windowId,
+    bounds: { windowState: 'normal', left: HIDDEN_X, top: HIDDEN_Y, width: 1280, height: 900 }
+  });
   await cdp.detach();
 }
 
