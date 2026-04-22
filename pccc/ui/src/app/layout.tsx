@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import SiteChatWidget from '@/components/SiteChatWidget';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 export const metadata: Metadata = {
   title: 'PCCC Consult',
@@ -13,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -23,8 +24,10 @@ export default function RootLayout({
         />
       </head>
       <body>
-        {children}
-        <SiteChatWidget />
+        <ThemeProvider>
+          {children}
+          <SiteChatWidget />
+        </ThemeProvider>
       </body>
     </html>
   );

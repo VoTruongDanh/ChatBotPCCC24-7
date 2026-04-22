@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useThemeMode } from '@/components/ThemeProvider';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
 
@@ -435,13 +436,13 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange, onIma
    MAIN PAGE
 ══════════════════════════════════════════════ */
 export default function ChatPage() {
+  const { theme, toggleTheme } = useThemeMode();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState('');
   const [mounted, setMounted] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('checking');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [toastType, setToastType] = useState<'success' | 'error'>('success');
@@ -455,17 +456,7 @@ export default function ChatPage() {
   useEffect(() => { 
     setSessionId(self.crypto?.randomUUID?.() || Math.random().toString(36).slice(2) + Date.now().toString(36)); 
     setMounted(true);
-    // Detect system theme
-    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setTheme(isDark ? 'dark' : 'light');
-    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
   }, []);
-
-  const toggleTheme = () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light';
-    setTheme(newTheme);
-    document.documentElement.setAttribute('data-theme', newTheme);
-  };
 
   const showToastMessage = (message: string, type: 'success' | 'error') => {
     setToastMessage(message);
@@ -1295,7 +1286,6 @@ export default function ChatPage() {
           <ParticleCanvas />
         </div>
 
-        {/* Nav */}
         <nav className="pccc-nav">
           <div className="pccc-nav-left">
             <Link href="/" className="pccc-brand">
@@ -1310,27 +1300,12 @@ export default function ChatPage() {
               <span className="pccc-brand-text">PCCC Consult</span>
             </Link>
             <div className="pccc-nav-links">
+              <Link href="/" className="pccc-nav-link">Trang chủ</Link>
               <Link href="/dich-vu" className="pccc-nav-link">Dịch vụ</Link>
-              <span className="pccc-nav-link pccc-nav-disabled" title="Sắp ra mắt">Quy định</span>
-              <span className="pccc-nav-link pccc-nav-disabled" title="Sắp ra mắt">Hồ sơ</span>
-              <span className="pccc-nav-link pccc-nav-disabled" title="Sắp ra mắt">Liên hệ</span>
+              <Link href="/admin" className="pccc-nav-link">Admin</Link>
             </div>
           </div>
           <div className="pccc-nav-right">
-            {messages.length > 0 && (
-              <button 
-                className="pccc-btn-ghost" 
-                onClick={resetChat}
-                disabled={loading}
-                style={{ marginRight: '8px' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
-                  <polyline points="1 4 1 10 7 10"></polyline>
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                </svg>
-                Cuộc trò chuyện mới
-              </button>
-            )}
             {connectionStatus === 'checking' && (
               <span className="pccc-status pccc-s-check">
                 <svg className="pccc-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -1363,13 +1338,26 @@ export default function ChatPage() {
                 </svg>
               )}
             </button>
-            <button className="pccc-btn-ghost">Đăng ký</button>
-            <button className="pccc-btn-primary">Đăng nhập</button>
           </div>
         </nav>
 
         {/* Content */}
         <div className="pccc-content">
+          <div className="mx-auto mb-6 flex w-full max-w-6xl flex-wrap items-center justify-end gap-3 px-2">
+            {messages.length > 0 && (
+              <button
+                className="pccc-btn-ghost"
+                onClick={resetChat}
+                disabled={loading}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                  <polyline points="1 4 1 10 7 10"></polyline>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                </svg>
+                Cuộc trò chuyện mới
+              </button>
+            )}
+          </div>
           {messages.length === 0 ? (
             /* ── HERO ── */
             <div className="pccc-hero">
@@ -1451,5 +1439,3 @@ export default function ChatPage() {
     </>
   );
 }
-
-

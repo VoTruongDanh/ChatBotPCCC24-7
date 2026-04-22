@@ -2,6 +2,7 @@
 
 import './admin.css';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Navigation from '@/components/Navigation';
 import {
   AdditionalService,
   API_URL,
@@ -487,7 +488,9 @@ export default function AdminPage() {
   );
 
   return (
-    <div className="a-shell">
+    <div>
+      <Navigation />
+      <div className="a-shell">
       <header className="a-topbar">
         <a href="/" className="a-topbar-brand">
           <span className="a-topbar-icon">🔥</span>
@@ -838,6 +841,7 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }

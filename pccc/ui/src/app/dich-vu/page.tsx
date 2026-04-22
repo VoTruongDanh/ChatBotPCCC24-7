@@ -4,6 +4,36 @@ import { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
 import { API_URL, EMPTY_SERVICE_DATA, ServicePackagesResponse } from '@/lib/service-packages';
 
+const FAQ_ITEMS = [
+  {
+    q: 'Thời gian hoàn thành dự án là bao lâu?',
+    a: 'Tùy theo gói và quy mô công trình, thời gian triển khai thường từ 7 đến 30 ngày. Với nhu cầu gấp, đội ngũ có thể bóc tách lộ trình theo từng mốc để không ảnh hưởng tiến độ vận hành.'
+  },
+  {
+    q: 'Sau khi hoàn thành có hỗ trợ tiếp không?',
+    a: 'Có. Các gói đều có hỗ trợ sau bàn giao. Gói cao hơn sẽ ưu tiên theo dõi hồ sơ, bảo trì định kỳ và hỗ trợ nhanh khi cần làm việc với cơ quan hoặc chủ đầu tư.'
+  },
+  {
+    q: 'Thanh toán theo hình thức nào?',
+    a: 'Thông thường thanh toán theo tiến độ: đặt cọc khi chốt phạm vi, thanh toán tiếp ở mốc hoàn thiện hồ sơ hoặc triển khai, phần còn lại khi nghiệm thu hoặc bàn giao.'
+  },
+  {
+    q: 'Có thể tùy chỉnh gói theo công trình thực tế không?',
+    a: 'Có. Gói niêm yết là khung tham chiếu để dễ chọn nhanh. Khi công trình có nhiều hạng mục hoặc yêu cầu đặc thù, hệ thống có thể được cấu hình lại để bám đúng nhu cầu thực tế.'
+  }
+];
+
+function getColorTone(color: string) {
+  const tones = {
+    blue: 'blue',
+    red: 'red',
+    orange: 'orange',
+    purple: 'purple'
+  } as const;
+
+  return tones[color as keyof typeof tones] || 'blue';
+}
+
 export default function ServicePage() {
   const [serviceData, setServiceData] = useState<ServicePackagesResponse>(EMPTY_SERVICE_DATA);
   const [loading, setLoading] = useState(true);
@@ -42,182 +72,136 @@ export default function ServicePage() {
     };
   }, []);
 
-  const getColorClasses = (color: string, type: 'bg' | 'border' | 'text' | 'gradient') => {
-    const colors = {
-      blue: {
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
-        text: 'text-blue-600',
-        gradient: 'from-blue-500 to-cyan-500'
-      },
-      red: {
-        bg: 'bg-red-50',
-        border: 'border-red-200',
-        text: 'text-red-600',
-        gradient: 'from-red-500 to-orange-500'
-      },
-      orange: {
-        bg: 'bg-orange-50',
-        border: 'border-orange-200',
-        text: 'text-orange-600',
-        gradient: 'from-orange-500 to-yellow-500'
-      },
-      purple: {
-        bg: 'bg-purple-50',
-        border: 'border-purple-200',
-        text: 'text-purple-600',
-        gradient: 'from-purple-500 to-pink-500'
-      }
-    };
-    return colors[color as keyof typeof colors]?.[type] || colors.blue[type];
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50">
+    <div className="services-page">
+      <div className="services-bg" aria-hidden="true">
+        <div className="services-orb services-orb-1" />
+        <div className="services-orb services-orb-2" />
+        <div className="services-grid" />
+      </div>
+
       <Navigation />
 
-      <div className="max-w-7xl mx-auto px-6 py-16 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-full mb-6">
-          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-          </svg>
-          <span className="font-semibold">Dịch Vụ Chuyên Nghiệp</span>
-        </div>
-        <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-          Gói Dịch Vụ PCCC
-        </h1>
-        <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          Lựa chọn gói dịch vụ phù hợp với nhu cầu của bạn. Chúng tôi cung cấp giải pháp toàn diện từ tư vấn, thiết kế đến nghiệm thu PCCC.
-        </p>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 pb-16">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {serviceData.packages.map((pkg) => (
-            <div
-              key={pkg.id}
-              className={`relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
-                pkg.recommended ? 'ring-2 ring-red-500 scale-105' : ''
-              }`}
-            >
-              {pkg.recommended && (
-                <div className="absolute top-0 right-0 bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-1 text-sm font-bold rounded-bl-lg">
-                  RECOMMEND
-                </div>
-              )}
-
-              <div className={`p-6 ${getColorClasses(pkg.color, 'bg')} border-b ${getColorClasses(pkg.color, 'border')}`}>
-                <h3 className="text-2xl font-bold text-gray-900 mb-2">{pkg.name}</h3>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl font-bold ${getColorClasses(pkg.color, 'text')}`}>
-                    {pkg.price}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-600 mt-1">{pkg.duration}</p>
-              </div>
-
-              <div className="p-6">
-                <ul className="space-y-3 mb-6">
-                  {pkg.features.map((feature, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <svg className={`w-5 h-5 ${getColorClasses(pkg.color, 'text')} flex-shrink-0 mt-0.5`} fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                      </svg>
-                      <span className="text-sm text-gray-700">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-
-                <button
-                  className={`w-full py-3 rounded-lg font-semibold text-white bg-gradient-to-r ${getColorClasses(pkg.color, 'gradient')} hover:shadow-lg transition-all duration-300 hover:scale-105`}
-                >
-                  Chọn gói này
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 pb-16">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Dịch Vụ Bổ Sung</h2>
-          <p className="text-lg text-gray-600">Các dịch vụ khác để hỗ trợ bạn toàn diện</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {serviceData.additionalServices.map((service) => (
-            <div
-              key={service.id}
-              className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
-            >
-              <div className="text-4xl mb-4">{service.icon}</div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">{service.title}</h3>
-              <p className="text-gray-600 text-sm mb-4">{service.description}</p>
-              <div className="flex items-center justify-between">
-                <span className="text-red-600 font-bold">{service.price}</span>
-                <button className="text-red-600 hover:text-red-700 font-medium text-sm">
-                  Chi tiết →
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 pb-16">
-        <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-12 text-center text-white shadow-2xl">
-          <h2 className="text-4xl font-bold mb-4">Chưa chắc chắn gói nào phù hợp?</h2>
-          <p className="text-xl mb-8 opacity-90">
-            Liên hệ với chúng tôi để được tư vấn miễn phí và báo giá chi tiết
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <button className="px-8 py-4 bg-white text-red-600 rounded-lg font-bold hover:bg-gray-100 transition-all duration-300 hover:scale-105">
-              Tư vấn miễn phí
-            </button>
-            <button className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-lg font-bold hover:bg-white/10 transition-all duration-300">
-              Gọi: 1900-xxxx
-            </button>
+      <main className="services-shell">
+        <section className="services-hero">
+          <div className="services-eyebrow">
+            <span className="services-eyebrow-dot" />
+            Dịch vụ triển khai thực chiến
           </div>
-        </div>
-      </div>
+          <h1 className="services-title">Gói dịch vụ PCCC theo nhu cầu thực tế</h1>
+          <p className="services-subtitle">
+            Chọn nhanh gói phù hợp để tư vấn, thiết kế, triển khai hồ sơ và đồng hành nghiệm thu.
+            Mọi nội dung dưới đây đang lấy trực tiếp từ dữ liệu dịch vụ hiện tại trong hệ thống.
+          </p>
+        </section>
 
-      <div className="max-w-4xl mx-auto px-6 pb-16">
-        <h2 className="text-4xl font-bold text-gray-900 text-center mb-12">Câu Hỏi Thường Gặp</h2>
-        <div className="space-y-4">
-          {[
-            {
-              q: 'Thời gian hoàn thành dự án là bao lâu?',
-              a: 'Tùy thuộc vào gói dịch vụ và quy mô dự án, thời gian hoàn thành từ 7-30 ngày. Chúng tôi cam kết đúng tiến độ đã thỏa thuận.'
-            },
-            {
-              q: 'Có hỗ trợ sau khi hoàn thành không?',
-              a: 'Có, tất cả các gói đều có hỗ trợ sau bán hàng. Gói Cao Cấp và Doanh Nghiệp có bảo hành và bảo trì định kỳ.'
-            },
-            {
-              q: 'Thanh toán như thế nào?',
-              a: 'Thanh toán theo tiến độ: 40% khi ký hợp đồng, 40% khi hoàn thành thiết kế, 20% khi nghiệm thu.'
-            },
-            {
-              q: 'Có thể tùy chỉnh gói dịch vụ không?',
-              a: 'Có, chúng tôi linh hoạt tùy chỉnh gói dịch vụ theo nhu cầu cụ thể của bạn. Liên hệ để được tư vấn chi tiết.'
-            }
-          ].map((faq, idx) => (
-            <details
-              key={idx}
-              className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-all duration-300"
-            >
-              <summary className="font-bold text-gray-900 text-lg">
-                {faq.q}
-              </summary>
-              <p className="mt-4 text-gray-600">{faq.a}</p>
-            </details>
-          ))}
-        </div>
-      </div>
+        <section className="services-section">
+          <div className="services-section-head">
+            <div>
+              <p className="services-kicker">Bảng giá gợi ý</p>
+              <h2>Gói chính</h2>
+            </div>
+
+          </div>
+
+          <div className="services-package-grid">
+            {serviceData.packages.map((pkg) => {
+              const tone = getColorTone(pkg.color);
+
+              return (
+                <article
+                  key={pkg.id}
+                  className={`services-package-card tone-${tone} ${pkg.recommended ? 'is-recommended' : ''}`}
+                >
+                  {pkg.recommended && <span className="services-recommend-badge">Recommend</span>}
+
+                  <div className="services-package-top">
+                    <p className="services-package-name">{pkg.name}</p>
+                    <div className="services-package-price-row">
+                      <span className="services-package-price">{pkg.price}</span>
+                    </div>
+                    <p className="services-package-duration">{pkg.duration}</p>
+                  </div>
+
+                  <ul className="services-feature-list">
+                    {pkg.features.map((feature, idx) => (
+                      <li key={`${pkg.id}-${idx}`}>
+                        <span className="services-feature-check">•</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <button className="services-package-cta" type="button">
+                    Chọn gói này
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="services-section">
+          <div className="services-section-head">
+            <div>
+              <p className="services-kicker">Hỗ trợ thêm</p>
+              <h2>Dịch vụ bổ sung</h2>
+            </div>
+            <p className="services-section-copy">Bổ sung từng hạng mục riêng nếu công trình không cần trọn gói.</p>
+          </div>
+
+          <div className="services-addon-grid">
+            {serviceData.additionalServices.map((service) => (
+              <article key={service.id} className="services-addon-card">
+                <div className="services-addon-icon">{service.icon}</div>
+                <h3>{service.title}</h3>
+                <p>{service.description}</p>
+                <div className="services-addon-foot">
+                  <span>{service.price}</span>
+                  <button type="button">Chi tiết</button>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section className="services-cta-panel">
+          <div>
+            <p className="services-kicker services-kicker-light">Chưa rõ nên chọn gói nào?</p>
+            <h2>Tư vấn nhanh theo loại công trình, quy mô và ngân sách</h2>
+            <p>
+              Nếu chưa chốt được phạm vi, hãy bắt đầu bằng gói gần nhất với nhu cầu hiện tại.
+              Đội ngũ sẽ bóc tách lại các hạng mục để tối ưu chi phí và tiến độ.
+            </p>
+          </div>
+          <div className="services-cta-actions">
+            <button className="services-cta-primary" type="button">Tư vấn miễn phí</button>
+            <button className="services-cta-secondary" type="button">Gọi: 1900-xxxx</button>
+          </div>
+        </section>
+
+        <section className="services-section">
+          <div className="services-section-head">
+            <div>
+              <p className="services-kicker">Giải đáp nhanh</p>
+              <h2>Câu hỏi thường gặp</h2>
+            </div>
+            <p className="services-section-copy">Những điểm người dùng hay hỏi trước khi chốt tư vấn.</p>
+          </div>
+
+          <div className="services-faq-list">
+            {FAQ_ITEMS.map((faq) => (
+              <details key={faq.q} className="services-faq-item">
+                <summary>{faq.q}</summary>
+                <p>{faq.a}</p>
+              </details>
+            ))}
+          </div>
+        </section>
+      </main>
 
       {loading && (
-        <div className="fixed bottom-6 right-6 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg">
+        <div className="services-loading-pill">
           Đang tải dữ liệu dịch vụ...
         </div>
       )}
