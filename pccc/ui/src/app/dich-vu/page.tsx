@@ -1,113 +1,47 @@
-﻿'use client';
+'use client';
 
+import { useEffect, useState } from 'react';
 import Navigation from '@/components/Navigation';
-
-interface ServicePackage {
-  id: string;
-  name: string;
-  price: string;
-  duration: string;
-  features: string[];
-  popular?: boolean;
-  color: string;
-}
-
-const packages: ServicePackage[] = [
-  {
-    id: 'basic',
-    name: 'Gói Cơ Bản',
-    price: '5.000.000đ',
-    duration: 'Một lần',
-    color: 'blue',
-    features: [
-      'Tư vấn thiết kế hệ thống PCCC',
-      'Lập hồ sơ thiết kế cơ bản',
-      'Hướng dẫn lắp đặt thiết bị',
-      'Hỗ trợ qua điện thoại',
-      'Thời gian hoàn thành: 7-10 ngày'
-    ]
-  },
-  {
-    id: 'standard',
-    name: 'Gói Tiêu Chuẩn',
-    price: '12.000.000đ',
-    duration: 'Một lần',
-    color: 'red',
-    popular: true,
-    features: [
-      'Tất cả tính năng Gói Cơ Bản',
-      'Khảo sát thực địa',
-      'Lập hồ sơ thiết kế chi tiết',
-      'Thẩm duyệt PCCC',
-      'Giám sát thi công',
-      'Hỗ trợ nghiệm thu',
-      'Thời gian hoàn thành: 15-20 ngày'
-    ]
-  },
-  {
-    id: 'premium',
-    name: 'Gói Cao Cấp',
-    price: '25.000.000đ',
-    duration: 'Một lần',
-    color: 'orange',
-    features: [
-      'Tất cả tính năng Gói Tiêu Chuẩn',
-      'Thiết kế hệ thống báo cháy tự động',
-      'Thiết kế hệ thống chữa cháy tự động',
-      'Lập phương án chữa cháy',
-      'Đào tạo nhân viên PCCC',
-      'Nghiệm thu PCCC',
-      'Bảo hành 12 tháng',
-      'Thời gian hoàn thành: 20-30 ngày'
-    ]
-  },
-  {
-    id: 'enterprise',
-    name: 'Gói Doanh Nghiệp',
-    price: 'Liên hệ',
-    duration: 'Theo dự án',
-    color: 'purple',
-    features: [
-      'Tất cả tính năng Gói Cao Cấp',
-      'Tư vấn toàn diện cho dự án lớn',
-      'Thiết kế hệ thống phức tạp',
-      'Quản lý dự án chuyên nghiệp',
-      'Đội ngũ kỹ sư chuyên trách',
-      'Bảo trì định kỳ 24 tháng',
-      'Hỗ trợ khẩn cấp 24/7',
-      'Ưu tiên xử lý'
-    ]
-  }
-];
-
-const additionalServices = [
-  {
-    icon: '📋',
-    title: 'Kiểm định PCCC',
-    description: 'Kiểm tra, đánh giá hệ thống PCCC hiện có',
-    price: 'Từ 3.000.000đ'
-  },
-  {
-    icon: '🎓',
-    title: 'Đào tạo PCCC',
-    description: 'Đào tạo nghiệp vụ PCCC cho nhân viên',
-    price: 'Từ 2.000.000đ/khóa'
-  },
-  {
-    icon: '🔧',
-    title: 'Bảo trì hệ thống',
-    description: 'Bảo trì, bảo dưỡng định kỳ hệ thống PCCC',
-    price: 'Từ 1.500.000đ/lần'
-  },
-  {
-    icon: '📝',
-    title: 'Tư vấn pháp lý',
-    description: 'Tư vấn về quy định, thủ tục PCCC',
-    price: 'Từ 1.000.000đ/buổi'
-  }
-];
+import { API_URL, EMPTY_SERVICE_DATA, ServicePackagesResponse } from '@/lib/service-packages';
 
 export default function ServicePage() {
+  const [serviceData, setServiceData] = useState<ServicePackagesResponse>(EMPTY_SERVICE_DATA);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadServiceData = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/service-packages`);
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const data = await response.json() as ServicePackagesResponse;
+        if (mounted) {
+          setServiceData({
+            packages: Array.isArray(data.packages) ? data.packages : [],
+            additionalServices: Array.isArray(data.additionalServices) ? data.additionalServices : []
+          });
+        }
+      } catch {
+        if (mounted) {
+          setServiceData(EMPTY_SERVICE_DATA);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadServiceData();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const getColorClasses = (color: string, type: 'bg' | 'border' | 'text' | 'gradient') => {
     const colors = {
       blue: {
@@ -140,10 +74,8 @@ export default function ServicePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50">
-      {/* Navigation */}
       <Navigation />
 
-      {/* Hero Section */}
       <div className="max-w-7xl mx-auto px-6 py-16 text-center">
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-full mb-6">
           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
@@ -159,22 +91,21 @@ export default function ServicePage() {
         </p>
       </div>
 
-      {/* Pricing Cards */}
       <div className="max-w-7xl mx-auto px-6 pb-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {packages.map((pkg) => (
+          {serviceData.packages.map((pkg) => (
             <div
               key={pkg.id}
               className={`relative bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden ${
-                pkg.popular ? 'ring-2 ring-red-500 scale-105' : ''
+                pkg.recommended ? 'ring-2 ring-red-500 scale-105' : ''
               }`}
             >
-              {pkg.popular && (
+              {pkg.recommended && (
                 <div className="absolute top-0 right-0 bg-gradient-to-r from-red-500 to-orange-500 text-white px-4 py-1 text-sm font-bold rounded-bl-lg">
-                  PHỔ BIẾN
+                  RECOMMEND
                 </div>
               )}
-              
+
               <div className={`p-6 ${getColorClasses(pkg.color, 'bg')} border-b ${getColorClasses(pkg.color, 'border')}`}>
                 <h3 className="text-2xl font-bold text-gray-900 mb-2">{pkg.name}</h3>
                 <div className="flex items-baseline gap-2">
@@ -208,7 +139,6 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* Additional Services */}
       <div className="max-w-7xl mx-auto px-6 pb-16">
         <div className="text-center mb-12">
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Dịch Vụ Bổ Sung</h2>
@@ -216,9 +146,9 @@ export default function ServicePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {additionalServices.map((service, idx) => (
+          {serviceData.additionalServices.map((service) => (
             <div
-              key={idx}
+              key={service.id}
               className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all duration-300 hover:-translate-y-1"
             >
               <div className="text-4xl mb-4">{service.icon}</div>
@@ -235,7 +165,6 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* CTA Section */}
       <div className="max-w-7xl mx-auto px-6 pb-16">
         <div className="bg-gradient-to-r from-red-500 to-orange-500 rounded-2xl p-12 text-center text-white shadow-2xl">
           <h2 className="text-4xl font-bold mb-4">Chưa chắc chắn gói nào phù hợp?</h2>
@@ -253,7 +182,6 @@ export default function ServicePage() {
         </div>
       </div>
 
-      {/* FAQ Section */}
       <div className="max-w-4xl mx-auto px-6 pb-16">
         <h2 className="text-4xl font-bold text-gray-900 text-center mb-12">Câu Hỏi Thường Gặp</h2>
         <div className="space-y-4">
@@ -287,7 +215,12 @@ export default function ServicePage() {
           ))}
         </div>
       </div>
+
+      {loading && (
+        <div className="fixed bottom-6 right-6 rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-700 shadow-lg">
+          Đang tải dữ liệu dịch vụ...
+        </div>
+      )}
     </div>
   );
 }
-

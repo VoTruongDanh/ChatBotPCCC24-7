@@ -65,10 +65,12 @@ fastify.get('/health', async () => ({
 import chatRoutes from './routes/chat.mjs';
 import rulesRoutes from './routes/rules.mjs';
 import settingsRoutes from './routes/settings.mjs';
+import servicePackagesRoutes from './routes/service-packages.mjs';
 
 fastify.register(chatRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, getBridgeApiKey });
 fastify.register(rulesRoutes, { prefix: '/api' });
 fastify.register(settingsRoutes, { prefix: '/api', bridgeUrl: BRIDGE_URL, bridgeApiKey: getBridgeApiKey() });
+fastify.register(servicePackagesRoutes, { prefix: '/api' });
 
 // Start
 const start = async () => {

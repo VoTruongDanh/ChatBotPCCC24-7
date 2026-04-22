@@ -1,0 +1,102 @@
+{
+  "packages": [
+    {
+      "id": "basic",
+      "name": "Gói Cơ Bản",
+      "price": "5.000.000đ",
+      "duration": "Một lần",
+      "features": [
+        "Tư vấn thiết kế hệ thống PCCC",
+        "Lập hồ sơ thiết kế cơ bản",
+        "Hướng dẫn lắp đặt thiết bị",
+        "Hỗ trợ qua điện thoại",
+        "Thời gian hoàn thành: 7-10 ngày"
+      ],
+      "color": "blue",
+      "recommended": false
+    },
+    {
+      "id": "standard",
+      "name": "Gói Tiêu Chuẩn",
+      "price": "12.000.000đ",
+      "duration": "Một lần",
+      "features": [
+        "Tất cả tính năng Gói Cơ Bản",
+        "Khảo sát thực địa",
+        "Lập hồ sơ thiết kế chi tiết",
+        "Thẩm duyệt PCCC",
+        "Giám sát thi công",
+        "Hỗ trợ nghiệm thu",
+        "Thời gian hoàn thành: 15-20 ngày"
+      ],
+      "color": "red",
+      "recommended": true
+    },
+    {
+      "id": "premium",
+      "name": "Gói Cao Cấp",
+      "price": "25.000.000đ",
+      "duration": "Một lần",
+      "features": [
+        "Tất cả tính năng Gói Tiêu Chuẩn",
+        "Thiết kế hệ thống báo cháy tự động",
+        "Thiết kế hệ thống chữa cháy tự động",
+        "Lập phương án chữa cháy",
+        "Đào tạo nhân viên PCCC",
+        "Nghiệm thu PCCC",
+        "Bảo hành 12 tháng",
+        "Thời gian hoàn thành: 20-30 ngày"
+      ],
+      "color": "orange",
+      "recommended": false
+    },
+    {
+      "id": "enterprise",
+      "name": "Gói Doanh Nghiệp",
+      "price": "Liên hệ",
+      "duration": "Theo dự án",
+      "features": [
+        "Tất cả tính năng Gói Cao Cấp",
+        "Tư vấn toàn diện cho dự án lớn",
+        "Thiết kế hệ thống phức tạp",
+        "Quản lý dự án chuyên nghiệp",
+        "Đội ngũ kỹ sư chuyên trách",
+        "Bảo trì định kỳ 24 tháng",
+        "Hỗ trợ khẩn cấp 24/7",
+        "Ưu tiên xử lý"
+      ],
+      "color": "purple",
+      "recommended": false
+    }
+  ],
+  "additionalServices": [
+    {
+      "id": "kiem-dinh-pccc",
+      "icon": "📋",
+      "title": "Kiểm định PCCC",
+      "description": "Kiểm tra, đánh giá hệ thống PCCC hiện có",
+      "price": "Từ 3.000.000đ"
+    },
+    {
+      "id": "dao-tao-pccc",
+      "icon": "🎓",
+      "title": "Đào tạo PCCC",
+      "description": "Đào tạo nghiệp vụ PCCC cho nhân viên",
+      "price": "Từ 2.000.000đ/khóa"
+    },
+    {
+      "id": "bao-tri-he-thong",
+      "icon": "🔧",
+      "title": "Bảo trì hệ thống",
+      "description": "Bảo trì, bảo dưỡng định kỳ hệ thống PCCC",
+      "price": "Từ 1.500.000đ/lần"
+    },
+    {
+      "id": "tu-van-phap-ly",
+      "icon": "📝",
+      "title": "Tư vấn pháp lý",
+      "description": "Tư vấn về quy định, thủ tục PCCC",
+      "price": "Từ 1.000.000đ/buổi"
+    }
+  ]
+}
