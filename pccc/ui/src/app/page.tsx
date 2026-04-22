@@ -217,6 +217,94 @@ function TypingDots() {
   );
 }
 
+function isShortLine(line: string) {
+  return line.length <= 68 && !/[.!?]$/.test(line);
+}
+
+function renderFormattedMessage(content: string) {
+  const normalized = content.replace(/\r/g, '').trim();
+  if (!normalized) return null;
+
+  const blocks = normalized.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
+  const nodes: React.ReactNode[] = [];
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
+    const singleLine = lines.join(' ');
+    const isHeading = lines.length === 1 && singleLine.length <= 90 && singleLine.endsWith(':');
+    const isExplicitList = lines.length > 1 && lines.every((line) => /^([-•*]|\d+\.)\s+/.test(line));
+    const isCallout = /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(singleLine);
+
+    if (isHeading) {
+      const listItems: string[] = [];
+      let nextIndex = i + 1;
+
+      while (nextIndex < blocks.length) {
+        const nextBlock = blocks[nextIndex].trim();
+        const nextLines = nextBlock.split('\n').map((line) => line.trim()).filter(Boolean);
+        if (
+          nextLines.length !== 1 ||
+          nextBlock.endsWith(':') ||
+          nextBlock.length > 90 ||
+          /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(nextBlock) ||
+          !isShortLine(nextBlock)
+        ) {
+          break;
+        }
+        listItems.push(nextBlock);
+        nextIndex += 1;
+      }
+
+      nodes.push(
+        <div key={`heading-${i}`} className="pccc-rich-block">
+          <p className="pccc-rich-heading">{singleLine}</p>
+          {listItems.length > 0 && (
+            <ul className="pccc-rich-list">
+              {listItems.map((item, index) => (
+                <li key={`li-${i}-${index}`}>{item}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+
+      if (listItems.length > 0) {
+        i = nextIndex - 1;
+      }
+      continue;
+    }
+
+    if (isExplicitList) {
+      nodes.push(
+        <ul key={`list-${i}`} className="pccc-rich-list">
+          {lines.map((line, index) => (
+            <li key={`explicit-${i}-${index}`}>{line.replace(/^([-•*]|\d+\.)\s+/, '')}</li>
+          ))}
+        </ul>
+      );
+      continue;
+    }
+
+    if (isCallout) {
+      nodes.push(
+        <div key={`callout-${i}`} className="pccc-rich-callout">
+          {singleLine}
+        </div>
+      );
+      continue;
+    }
+
+    nodes.push(
+      <p key={`paragraph-${i}`} className="pccc-rich-paragraph">
+        {lines.join(' ')}
+      </p>
+    );
+  }
+
+  return <div className="pccc-rich-text">{nodes}</div>;
+}
+
 /* ══════════════════════════════════════════════
    MESSAGE BUBBLE
 ══════════════════════════════════════════════ */
@@ -280,10 +368,10 @@ function Bubble({ msg, index }: { msg: Message; index: number }) {
             </span>
           )}
         </div>
-        <p className="pccc-text">
-          {msg.content || (msg.status === 'streaming' ? '' : '')}
+        <div className="pccc-text">
+          {renderFormattedMessage(msg.content || (msg.status === 'streaming' ? '' : ''))}
           {msg.status === 'streaming' && <span className="pccc-cursor">▋</span>}
-        </p>
+        </div>
       </div>
       {isUser && (
         <div className="pccc-avatar pccc-avatar-user">
@@ -804,6 +892,58 @@ export default function ChatPage() {
           position: relative; z-index: 10; flex: 1;
           display: flex; flex-direction: column; overflow: hidden;
         }
+        .pccc-toolbar-wrap {
+          position: relative;
+          z-index: 20;
+          display: flex;
+          justify-content: center;
+          padding: 16px 24px 8px;
+        }
+        .pccc-toolbar {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-height: 50px;
+          padding: 0 18px 0 14px;
+          border-radius: 12px;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: linear-gradient(180deg, rgba(34,18,11,0.92) 0%, rgba(16,8,5,0.94) 100%);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 30px rgba(0,0,0,0.34);
+          color: #f5e7dc;
+          font-family: inherit;
+          font-size: 14px;
+          font-weight: 700;
+          letter-spacing: -0.2px;
+          cursor: pointer;
+          transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .pccc-toolbar:hover:not(:disabled) {
+          transform: translateY(-1px);
+          border-color: rgba(255,255,255,0.24);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 34px rgba(0,0,0,0.4);
+        }
+        .pccc-toolbar:disabled { opacity: 0.6; cursor: not-allowed; }
+        .pccc-toolbar-icon {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 22px;
+          height: 22px;
+          color: rgba(255,244,237,0.86);
+        }
+        .pccc-toolbar-text { white-space: nowrap; }
+        .pccc-toolbar-dot {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: radial-gradient(circle at 35% 35%, #ffb36b 0%, #ff7a1a 45%, #d9480f 100%);
+          box-shadow: 0 0 12px rgba(249,115,22,0.9);
+          animation: emberBlink 2.2s ease-in-out infinite;
+        }
+        @keyframes emberBlink {
+          0%, 100% { opacity: 0.72; transform: scale(0.96); }
+          50% { opacity: 1; transform: scale(1.08); }
+        }
 
         /* ── Hero ── */
         .pccc-hero {
@@ -1044,9 +1184,44 @@ export default function ChatPage() {
 
         .pccc-text {
           font-size: 14.5px; line-height: 1.66; color: var(--text);
-          white-space: pre-wrap; word-break: break-word; letter-spacing: -0.1px;
+          word-break: break-word; letter-spacing: -0.1px;
         }
         .pccc-bubble-user .pccc-text { color: #fff; }
+        .pccc-rich-text { display: flex; flex-direction: column; gap: 10px; }
+        .pccc-rich-block { display: flex; flex-direction: column; gap: 6px; }
+        .pccc-rich-heading {
+          font-size: 14px;
+          font-weight: 700;
+          line-height: 1.45;
+          color: var(--text);
+        }
+        .pccc-bubble-user .pccc-rich-heading { color: #fff; }
+        .pccc-rich-paragraph {
+          font-size: 14.5px;
+          line-height: 1.58;
+          color: inherit;
+        }
+        .pccc-rich-list {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          padding-left: 18px;
+          margin: 0;
+        }
+        .pccc-rich-list li {
+          line-height: 1.56;
+        }
+        .pccc-rich-callout {
+          padding: 10px 12px;
+          border-radius: 12px;
+          background: rgba(249,115,22,0.08);
+          border: 1px solid rgba(249,115,22,0.16);
+          line-height: 1.56;
+        }
+        .pccc-bubble-user .pccc-rich-callout {
+          background: rgba(255,255,255,0.12);
+          border-color: rgba(255,255,255,0.16);
+        }
 
         /* ── Cursor blink ── */
         .pccc-cursor { color: var(--ember); animation: blink 0.7s steps(1) infinite; margin-left: 1px; }
@@ -1072,6 +1247,13 @@ export default function ChatPage() {
         @media (max-width: 640px) {
           .pccc-nav { padding: 0 20px; }
           .pccc-nav-links { display: none; }
+          .pccc-toolbar-wrap { justify-content: flex-start; padding: 12px 16px 6px; }
+          .pccc-toolbar {
+            width: 100%;
+            justify-content: center;
+            min-height: 48px;
+            padding: 0 16px;
+          }
           .pccc-chat { padding: 16px 16px 8px; }
           .pccc-bottom { padding: 8px 16px 16px; }
           .pccc-hero { padding: 24px 16px; }
@@ -1343,21 +1525,20 @@ export default function ChatPage() {
 
         {/* Content */}
         <div className="pccc-content">
-          <div className="mx-auto mb-6 flex w-full max-w-6xl flex-wrap items-center justify-end gap-3 px-2">
-            {messages.length > 0 && (
-              <button
-                className="pccc-btn-ghost"
-                onClick={resetChat}
-                disabled={loading}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
-                  <polyline points="1 4 1 10 7 10"></polyline>
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                </svg>
-                Cuộc trò chuyện mới
+          {messages.length > 0 && (
+            <div className="pccc-toolbar-wrap">
+              <button className="pccc-toolbar" onClick={resetChat} disabled={loading} title="Cuộc trò chuyện mới">
+                <span className="pccc-toolbar-icon" aria-hidden="true">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 2 3 8 9 8" />
+                    <path d="M3.05 13a9 9 0 1 0 2.42-7.12L3 8" />
+                  </svg>
+                </span>
+                <span className="pccc-toolbar-text">Cuộc trò chuyện mới</span>
+                <span className="pccc-toolbar-dot" aria-hidden="true" />
               </button>
-            )}
-          </div>
+            </div>
+          )}
           {messages.length === 0 ? (
             /* ── HERO ── */
             <div className="pccc-hero">
