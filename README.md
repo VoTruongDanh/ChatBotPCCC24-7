@@ -64,10 +64,10 @@ npm run dev
 
 | Service | Port | Module |
 |---------|------|--------|
-| be-bridge | 1122 | bridge |
-| ui-bridge | 3002 | bridge |
-| be-main | 6969 | pccc |
-| ui | 3000 | pccc |
+| be-bridge | 1110 | bridge |
+| ui-bridge | 1111 | bridge |
+| be-main | 8888 | pccc |
+| ui | 8889 | pccc |
 
 ## 🛠️ Tech Stack
 
