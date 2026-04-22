@@ -308,13 +308,20 @@ function ChatInput({ input, loading, connectionStatus, onSubmit, onChange, onIma
   const { ref: sendRef, trigger: ripple } = useRipple();
   const magRef = useMagnetic(0.25);
 
+  const focusInput = useCallback(() => {
+    window.setTimeout(() => {
+      inputRef.current?.focus();
+    }, 0);
+  }, []);
+
+  useEffect(() => {
+    if (connectionStatus !== 'connected' || loading) return;
+    focusInput();
+  }, [connectionStatus, loading, focusInput]);
+
   const handleSubmit = (e: React.FormEvent) => {
     ripple();
     onSubmit(e);
-    // Keep focus on input after submit
-    setTimeout(() => {
-      inputRef.current?.focus();
-    }, 50);
   };
 
   return (

@@ -267,11 +267,17 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
       {/* Top progress */}
       <div className="admin-progress" data-active={busy ? 'true' : 'false'} role="progressbar" aria-hidden={!busy} aria-busy={busy} />
 
-      <div role="region" aria-label="Thông báo hệ thống" aria-live="polite" className="admin-toast-stack">
+      <div
+        role="region"
+        aria-label="Thông báo hệ thống"
+        aria-live="polite"
+        className="admin-toast-stack"
+        style={{ position: 'fixed', right: 20, top: 20, zIndex: 1200 }}
+      >
         {error && (
-          <div role="alert" className="admin-toast admin-toast-error">
+          <div role="alert" className="admin-toast admin-toast-error" style={{ width: 'fit-content', maxWidth: 'min(420px, calc(100vw - 32px))' }}>
             <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <p className="font-semibold text-xs uppercase tracking-wide mb-1">Có lỗi</p>
               <p className="whitespace-pre-wrap break-words text-sm">{error}</p>
             </div>
@@ -281,9 +287,9 @@ function AdminDashboard({ sessionToken, onLogout }: { sessionToken: string; onLo
           </div>
         )}
         {success && (
-          <div role="status" className="admin-toast admin-toast-success">
+          <div role="status" className="admin-toast admin-toast-success" style={{ width: 'fit-content', maxWidth: 'min(420px, calc(100vw - 32px))' }}>
             <Radio className="h-4 w-4 shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0">
               <p className="font-semibold text-xs uppercase tracking-wide mb-1">Thành công</p>
               <p className="text-sm">{success}</p>
             </div>
