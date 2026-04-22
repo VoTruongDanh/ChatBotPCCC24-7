@@ -2,6 +2,100 @@ export default async function chatRoutes(fastify, options) {
   const BRIDGE_URL = options.bridgeUrl || 'http://127.0.0.1:1110';
   const getBridgeApiKey = options.getBridgeApiKey || (() => '');
 
+  const buildServicePackagesRule = async () => {
+    const { getServicePackagesData } = await import('../services/service-packages.service.mjs');
+    const serviceData = getServicePackagesData();
+
+    if (!serviceData.packages.length && !serviceData.additionalServices.length) {
+      return null;
+    }
+
+    const packageLines = serviceData.packages.map((pkg) => {
+      const recommendMark = pkg.recommended ? ' [recommend]' : '';
+      return `- ${pkg.name}${recommendMark}: gia ${pkg.price}, thoi luong ${pkg.duration}, tinh nang ${pkg.features.join('; ')}`;
+    });
+
+    const additionalServiceLines = serviceData.additionalServices.map((service) => (
+      `- ${service.title}: ${service.price}. Mo ta: ${service.description}`
+    ));
+
+    return {
+      id: 'dynamic-service-packages',
+      type: 'context',
+      priority: 999,
+      active: true,
+      name: 'Du lieu goi dich vu hien tai',
+      content: [
+        'Duoi day la du lieu goi dich vu PCCC hien tai, phai uu tien dung du lieu nay khi tu van:',
+        'GOI DICH VU:',
+        ...packageLines,
+        'DICH VU BO SUNG:',
+        ...additionalServiceLines,
+        'Neu nguoi dung muon chon goi, hay de xuat goi phu hop theo nhu cau va quy mo. Khong tu tao bang gia ngoai du lieu nay.'
+      ].join('\n')
+    };
+  };
+
+  const buildSiteSalesRule = async () => {
+    const { getSiteSalesContext } = await import('../services/site-sales-context.service.mjs');
+    const siteContext = getSiteSalesContext();
+
+    if (!siteContext) {
+      return null;
+    }
+
+    return {
+      id: 'dynamic-site-sales-context',
+      type: 'context',
+      priority: 998,
+      active: true,
+      name: 'Thong tin web va boi canh sale',
+      content: [
+        `Thuong hieu: ${siteContext.brandName || 'PCCC Consult'}`,
+        `Thi truong: ${siteContext.market || ''}`,
+        `Giong dieu thuong hieu: ${(siteContext.brandVoice || []).join(', ')}`,
+        `Dich vu cot loi: ${(siteContext.coreOffers || []).join('; ')}`,
+        `Muc tieu sale: ${(siteContext.salesGoals || []).join('; ')}`,
+        `CTA co the dung: ${(siteContext.contactCtas || []).join('; ')}`,
+        'Cac trang web chinh:',
+        ...((siteContext.websitePages || []).map((page) => `- ${page.path}: ${page.title}. Muc dich: ${page.intent}`)),
+        'Ghi chu sale:',
+        ...((siteContext.salesNotes || []).map((note) => `- ${note}`))
+      ].join('\n')
+    };
+  };
+
+  const buildPageContextRule = (pageContext) => {
+    if (!pageContext || typeof pageContext !== 'object') {
+      return null;
+    }
+
+    const path = typeof pageContext.path === 'string' ? pageContext.path : '';
+    const title = typeof pageContext.title === 'string' ? pageContext.title : '';
+    const source = typeof pageContext.source === 'string' ? pageContext.source : '';
+    const intent = typeof pageContext.intent === 'string' ? pageContext.intent : '';
+
+    if (!path && !title && !source && !intent) {
+      return null;
+    }
+
+    return {
+      id: 'dynamic-page-context',
+      type: 'context',
+      priority: 997,
+      active: true,
+      name: 'Ngu canh gui tin hien tai',
+      content: [
+        'Nguoi dung dang chat voi boi canh sau:',
+        path ? `- Path: ${path}` : '',
+        title ? `- Ten trang: ${title}` : '',
+        source ? `- Nguon gui: ${source}` : '',
+        intent ? `- Muc dich trang: ${intent}` : '',
+        'Can toi uu tra loi va huong sale theo boi canh nay.'
+      ].filter(Boolean).join('\n')
+    };
+  };
+
   const getHeaders = (sessionId = null) => {
     const headers = { 'Content-Type': 'application/json' };
     const key = getBridgeApiKey();
@@ -58,7 +152,7 @@ export default async function chatRoutes(fastify, options) {
 
   // POST /api/chat/stream - SSE streaming
   fastify.post('/chat/stream', async (request, reply) => {
-    const { prompt, messages, sessionId, image } = request.body || {};
+    const { prompt, messages, sessionId, image, pageContext } = request.body || {};
 
     if (!prompt && (!messages || messages.length === 0)) {
       return reply.status(400).send({ error: 'Thiếu prompt hoặc messages' });
@@ -77,13 +171,22 @@ export default async function chatRoutes(fastify, options) {
     try {
       const { getActiveRules } = await import('../services/rules.service.mjs');
       const rules = getActiveRules();
+      const servicePackagesRule = await buildServicePackagesRule();
+      const siteSalesRule = await buildSiteSalesRule();
+      const pageContextRule = buildPageContextRule(pageContext);
+      const mergedRules = [
+        ...rules,
+        ...(servicePackagesRule ? [servicePackagesRule] : []),
+        ...(siteSalesRule ? [siteSalesRule] : []),
+        ...(pageContextRule ? [pageContextRule] : [])
+      ];
 
-      fastify.log.info(`[chat/stream] Forwarding to bridge with ${rules.length} rules`);
+      fastify.log.info(`[chat/stream] Forwarding to bridge with ${mergedRules.length} rules`);
 
       const response = await fetch(`${BRIDGE_URL}/internal/bridge/chat/stream`, {
         method: 'POST',
         headers: getHeaders(sessionId),
-        body: JSON.stringify({ prompt, rules, sessionId, image })
+        body: JSON.stringify({ prompt, rules: mergedRules, sessionId, image })
       });
 
       if (!response.ok) {

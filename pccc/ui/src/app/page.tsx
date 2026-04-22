@@ -5,6 +5,13 @@ import Link from 'next/link';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8888';
 
+const PAGE_CONTEXT = {
+  path: '/',
+  title: 'Trang chu chat PCCC',
+  source: 'main-chat-page',
+  intent: 'Nguoi dung dang chat tu trang chu cua website PCCC'
+};
+
 interface Message {
   role: 'user' | 'assistant';
   content: string;
@@ -505,7 +512,8 @@ export default function ChatPage() {
         body: JSON.stringify({ 
           prompt: savedInput, 
           sessionId,
-          image: selectedImage // Gửi base64 image
+          image: selectedImage,
+          pageContext: PAGE_CONTEXT
         }),
       });
       
@@ -1443,6 +1451,5 @@ export default function ChatPage() {
     </>
   );
 }
-
 
 

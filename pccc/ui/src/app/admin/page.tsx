@@ -1,7 +1,7 @@
 'use client';
 
 import './admin.css';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AdditionalService,
   API_URL,
@@ -16,6 +16,7 @@ interface Rule {
   id: string;
   name: string;
   type: 'system' | 'context' | 'instruction';
+  scope?: 'pccc' | 'sales';
   content: string;
   priority: number;
   active: boolean;
@@ -34,12 +35,59 @@ const TYPE_META = {
   instruction: { label: 'Hướng dẫn', color: 'a-badge-warn' }
 };
 
+const SCOPE_META = {
+  pccc: {
+    label: 'Tư vấn PCCC',
+    color: '#2563eb',
+    bg: 'rgba(37,99,235,0.08)',
+    border: 'rgba(37,99,235,0.16)',
+    description: 'Rule chuyên môn, quy định, hồ sơ, nghiệm thu và tư vấn nghiệp vụ PCCC.'
+  },
+  sales: {
+    label: 'Sale dịch vụ',
+    color: '#dc2626',
+    bg: 'rgba(220,38,38,0.08)',
+    border: 'rgba(220,38,38,0.16)',
+    description: 'Rule dùng để tư vấn gói, báo giá, chốt nhu cầu và call-to-action.'
+  }
+} as const;
+
+const SALES_ROLE_TEMPLATE = {
+  name: 'Role tu van goi dich vu PCCC',
+  type: 'system' as Rule['type'],
+  scope: 'sales' as const,
+  content: 'Ban dong thoi la tu van vien ban giai phap PCCC. Khi nguoi dung hoi ve chi phi, bao gia, chon goi, nang cap he thong, hoac nhu cau trien khai dich vu, hay chu dong goi y goi dich vu phu hop dua tren du lieu goi hien tai. Tu van theo huong huu ich, khong ep mua, khong qua da. Luon giai thich vi sao goi do phu hop, neu can thi de nghi nguoi dung de lai thong tin cong trinh de duoc tu van sau.',
+  priority: 4,
+  active: true
+};
+
+const PCCC_TEMPLATE = {
+  name: 'Huong dan tu van nghiep vu PCCC',
+  type: 'instruction' as Rule['type'],
+  scope: 'pccc' as const,
+  content: 'Tap trung tu van dung pham vi PCCC, dua tren quy dinh, thuc te cong trinh, ho so, nghiem thu, van hanh va an toan. Tra loi ngan gon, co cau truc, uu tien hanh dong cu the va canh bao dung rui ro.',
+  priority: 4,
+  active: true
+};
+
 const Spin = () => (
   <svg className="a-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
     <circle cx="12" cy="12" r="10" strokeOpacity=".25" />
     <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
   </svg>
 );
+
+function ScopeBadge({ scope }: { scope: 'pccc' | 'sales' }) {
+  const meta = SCOPE_META[scope];
+  return (
+    <span
+      className="a-badge"
+      style={{ color: meta.color, background: meta.bg, border: `1px solid ${meta.border}` }}
+    >
+      {meta.label}
+    </span>
+  );
+}
 
 export default function AdminPage() {
   const [tab, setTab] = useState<AdminTab>('settings');
@@ -57,7 +105,14 @@ export default function AdminPage() {
   const [mutState, setMutState] = useState<MutState>('idle');
   const [mutError, setMutError] = useState<string | null>(null);
   const [mutSuccess, setMutSuccess] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', type: 'instruction' as Rule['type'], content: '', priority: 5, active: true });
+  const [form, setForm] = useState({
+    name: '',
+    type: 'instruction' as Rule['type'],
+    scope: 'pccc' as 'pccc' | 'sales',
+    content: '',
+    priority: 5,
+    active: true
+  });
   const [serviceData, setServiceData] = useState<ServicePackagesResponse>(EMPTY_SERVICE_DATA);
   const [serviceLoading, setServiceLoading] = useState(false);
   const [serviceError, setServiceError] = useState<string | null>(null);
@@ -238,7 +293,14 @@ export default function AdminPage() {
 
   const resetForm = () => {
     setEditingRule(null);
-    setForm({ name: '', type: 'instruction', content: '', priority: 5, active: true });
+    setForm({
+      name: '',
+      type: 'instruction',
+      scope: 'pccc',
+      content: '',
+      priority: 5,
+      active: true
+    });
   };
 
   const startEdit = (rule: Rule) => {
@@ -246,6 +308,7 @@ export default function AdminPage() {
     setForm({
       name: rule.name,
       type: rule.type,
+      scope: rule.scope || 'pccc',
       content: rule.content,
       priority: rule.priority,
       active: rule.active
@@ -354,6 +417,75 @@ export default function AdminPage() {
     }
   };
 
+  const pcccRules = useMemo(
+    () => rules.filter((rule) => (rule.scope || 'pccc') === 'pccc'),
+    [rules]
+  );
+  const salesRules = useMemo(
+    () => rules.filter((rule) => (rule.scope || 'pccc') === 'sales'),
+    [rules]
+  );
+
+  const renderRuleSection = (title: string, scope: 'pccc' | 'sales', sectionRules: Rule[]) => (
+    <div className="a-card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <p className="a-section-title" style={{ marginBottom: 4 }}>{title}</p>
+          <p style={{ fontSize: 12, color: 'var(--a-text-3)' }}>{SCOPE_META[scope].description}</p>
+        </div>
+        <ScopeBadge scope={scope} />
+      </div>
+
+      {sectionRules.length === 0 ? (
+        <div className="a-empty" style={{ minHeight: 120 }}>
+          <span style={{ fontSize: 28, marginBottom: 8 }}>📭</span>
+          <p style={{ fontWeight: 600, color: 'var(--a-text-2)' }}>Chưa có rule</p>
+          <p style={{ fontSize: 12, color: 'var(--a-text-3)', marginTop: 4 }}>Tạo rule mới ở khung bên trái.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sectionRules.map((rule) => (
+            <div key={rule.id} className="a-rule-row" data-inactive={!rule.active}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--a-text)' }}>{rule.name}</span>
+                    <span className={`a-badge ${TYPE_META[rule.type].color}`}>{TYPE_META[rule.type].label}</span>
+                    <span style={{ fontSize: 11, color: 'var(--a-text-4)' }}>P{rule.priority}</span>
+                  </div>
+                  <p style={{ fontSize: 12, color: 'var(--a-text-3)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {rule.content}
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--a-border)' }}>
+                <button
+                  className={`a-btn ${rule.active ? 'a-btn-secondary' : 'a-btn-ghost'}`}
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => void handleToggle(rule)}
+                  disabled={mutState === 'toggling'}
+                >
+                  {mutState === 'toggling' ? <Spin /> : rule.active ? '● Active' : '○ Inactive'}
+                </button>
+                <button className="a-btn a-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => startEdit(rule)}>
+                  ✏ Sửa
+                </button>
+                <button
+                  className="a-btn a-btn-danger"
+                  style={{ fontSize: 11, padding: '3px 10px', marginLeft: 'auto' }}
+                  onClick={() => void handleDelete(rule.id)}
+                  disabled={mutState === 'deleting'}
+                >
+                  {mutState === 'deleting' ? <Spin /> : '🗑'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="a-shell">
       <header className="a-topbar">
@@ -437,9 +569,36 @@ export default function AdminPage() {
         )}
 
         {tab === 'rules' && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, alignItems: 'start' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.25fr', gap: 20, alignItems: 'start' }}>
             <div className="a-card" style={{ padding: 20 }}>
               <p className="a-section-title">{editingRule ? 'Chỉnh sửa Rule' : 'Thêm Rule mới'}</p>
+              <div
+                style={{
+                  marginBottom: 14,
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  background: SCOPE_META[form.scope].bg,
+                  border: `1px solid ${SCOPE_META[form.scope].border}`
+                }}
+              >
+                <div style={{ fontSize: 12, fontWeight: 700, color: SCOPE_META[form.scope].color }}>
+                  {form.scope === 'sales' ? 'Nhóm Sale dịch vụ' : 'Nhóm Tư vấn PCCC'}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, color: 'var(--a-text-3)' }}>
+                  {SCOPE_META[form.scope].description}
+                </div>
+              </div>
+
+              {!editingRule && (
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <button type="button" className="a-btn a-btn-secondary" onClick={() => setForm(SALES_ROLE_TEMPLATE)}>
+                    Nạp mẫu role bán gói dịch vụ
+                  </button>
+                  <button type="button" className="a-btn a-btn-secondary" onClick={() => setForm(PCCC_TEMPLATE)}>
+                    Nạp mẫu tư vấn PCCC
+                  </button>
+                </div>
+              )}
 
               {mutError && <div className="a-alert a-alert-error" style={{ marginBottom: 12 }}><span>⚠</span><span>{mutError}</span></div>}
               {mutSuccess && <div className="a-alert a-alert-success" style={{ marginBottom: 12 }}><span>✓</span><span>{mutSuccess}</span></div>}
@@ -456,6 +615,14 @@ export default function AdminPage() {
                     <option value="system">Vai trò (System)</option>
                     <option value="context">Kiến thức (Context)</option>
                     <option value="instruction">Hướng dẫn (Instruction)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="a-label">Nhóm chỉnh sửa</label>
+                  <select className="a-input" value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value as 'pccc' | 'sales' })}>
+                    <option value="pccc">Tư vấn PCCC</option>
+                    <option value="sales">Sale dịch vụ</option>
                   </select>
                 </div>
 
@@ -485,79 +652,51 @@ export default function AdminPage() {
               </form>
             </div>
 
-            <div className="a-card" style={{ padding: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                <p className="a-section-title" style={{ marginBottom: 0 }}>Danh sách Rules</p>
-                <button className="a-btn a-btn-ghost" onClick={() => void fetchRules()} disabled={rulesLoading} style={{ fontSize: 12, padding: '4px 10px' }}>
-                  {rulesLoading ? <Spin /> : '↻'} Làm mới
-                </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="a-card" style={{ padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <p className="a-section-title" style={{ marginBottom: 4 }}>Phân khu Rules</p>
+                    <p style={{ fontSize: 12, color: 'var(--a-text-3)' }}>
+                      Tách rõ 2 mạch: chuyên môn PCCC và sale dịch vụ.
+                    </p>
+                  </div>
+                  <button className="a-btn a-btn-ghost" onClick={() => void fetchRules()} disabled={rulesLoading} style={{ fontSize: 12, padding: '4px 10px' }}>
+                    {rulesLoading ? <Spin /> : '↻'} Làm mới
+                  </button>
+                </div>
+
+                {!rulesLoading && rulesError && (
+                  <div className="a-alert a-alert-error">
+                    <span>⚠</span>
+                    <div>
+                      <p style={{ fontWeight: 600 }}>Không tải được rules</p>
+                      <p style={{ marginTop: 2 }}>{rulesError}</p>
+                      <button className="a-btn a-btn-secondary" onClick={() => void fetchRules()} style={{ marginTop: 8, fontSize: 12 }}>Thử lại</button>
+                    </div>
+                  </div>
+                )}
+
+                {rulesLoading && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[1, 2, 3].map((i) => <div key={i} className="a-skeleton" style={{ height: 72 }} />)}
+                  </div>
+                )}
+
+                {!rulesLoading && !rulesError && rules.length === 0 && (
+                  <div className="a-empty">
+                    <span style={{ fontSize: 32, marginBottom: 8 }}>📋</span>
+                    <p style={{ fontWeight: 600, color: 'var(--a-text-2)' }}>Chưa có rule nào</p>
+                    <p style={{ fontSize: 12, color: 'var(--a-text-3)', marginTop: 4 }}>Thêm rule đầu tiên ở form bên trái.</p>
+                  </div>
+                )}
               </div>
 
-              {!rulesLoading && rulesError && (
-                <div className="a-alert a-alert-error">
-                  <span>⚠</span>
-                  <div>
-                    <p style={{ fontWeight: 600 }}>Không tải được rules</p>
-                    <p style={{ marginTop: 2 }}>{rulesError}</p>
-                    <button className="a-btn a-btn-secondary" onClick={() => void fetchRules()} style={{ marginTop: 8, fontSize: 12 }}>Thử lại</button>
-                  </div>
-                </div>
-              )}
-
-              {rulesLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {[1, 2, 3].map((i) => <div key={i} className="a-skeleton" style={{ height: 72 }} />)}
-                </div>
-              )}
-
-              {!rulesLoading && !rulesError && rules.length === 0 && (
-                <div className="a-empty">
-                  <span style={{ fontSize: 32, marginBottom: 8 }}>📋</span>
-                  <p style={{ fontWeight: 600, color: 'var(--a-text-2)' }}>Chưa có rule nào</p>
-                  <p style={{ fontSize: 12, color: 'var(--a-text-3)', marginTop: 4 }}>Thêm rule đầu tiên ở form bên trái.</p>
-                </div>
-              )}
-
               {!rulesLoading && !rulesError && rules.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {rules.map((rule) => (
-                    <div key={rule.id} className="a-rule-row" data-inactive={!rule.active}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-                            <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--a-text)' }}>{rule.name}</span>
-                            <span className={`a-badge ${TYPE_META[rule.type].color}`}>{TYPE_META[rule.type].label}</span>
-                            <span style={{ fontSize: 11, color: 'var(--a-text-4)' }}>P{rule.priority}</span>
-                          </div>
-                          <p style={{ fontSize: 12, color: 'var(--a-text-3)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                            {rule.content}
-                          </p>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--a-border)' }}>
-                        <button
-                          className={`a-btn ${rule.active ? 'a-btn-secondary' : 'a-btn-ghost'}`}
-                          style={{ fontSize: 11, padding: '3px 10px' }}
-                          onClick={() => void handleToggle(rule)}
-                          disabled={mutState === 'toggling'}
-                        >
-                          {mutState === 'toggling' ? <Spin /> : rule.active ? '● Active' : '○ Inactive'}
-                        </button>
-                        <button className="a-btn a-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => startEdit(rule)}>
-                          ✏ Sửa
-                        </button>
-                        <button
-                          className="a-btn a-btn-danger"
-                          style={{ fontSize: 11, padding: '3px 10px', marginLeft: 'auto' }}
-                          onClick={() => void handleDelete(rule.id)}
-                          disabled={mutState === 'deleting'}
-                        >
-                          {mutState === 'deleting' ? <Spin /> : '🗑'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <>
+                  {renderRuleSection('Tư vấn PCCC', 'pccc', pcccRules)}
+                  {renderRuleSection('Sale gói dịch vụ', 'sales', salesRules)}
+                </>
               )}
             </div>
           </div>

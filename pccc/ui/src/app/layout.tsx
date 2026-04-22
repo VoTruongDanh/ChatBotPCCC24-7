@@ -1,5 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
+import SiteChatWidget from '@/components/SiteChatWidget';
 
 export const metadata: Metadata = {
   title: 'PCCC Consult',
@@ -21,7 +22,10 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <SiteChatWidget />
+      </body>
     </html>
   );
 }

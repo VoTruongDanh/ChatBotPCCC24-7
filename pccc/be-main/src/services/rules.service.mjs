@@ -36,6 +36,7 @@ export function createRule(ruleData) {
     id: `rule-${Date.now()}`,
     name: ruleData.name,
     type: ruleData.type || 'instruction',
+    scope: ruleData.scope || 'pccc',
     content: ruleData.content,
     priority: ruleData.priority || 10,
     active: ruleData.active ?? true,
