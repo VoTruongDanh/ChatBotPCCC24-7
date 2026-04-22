@@ -225,40 +225,48 @@ function renderFormattedMessage(content: string) {
   const normalized = content.replace(/\r/g, '').trim();
   if (!normalized) return null;
 
-  const blocks = normalized.split(/\n\s*\n+/).map((block) => block.trim()).filter(Boolean);
+  const rawLines = normalized.split('\n').map((line) => line.trim());
+  const lines = rawLines.filter(Boolean);
   const nodes: React.ReactNode[] = [];
+  const headingPrefixes = ['👉', '🔥', '⚠️', '📌', '📍', '💡', '✅', '❌', '📋', '🛠️', '📦', '🔹', '⭐'];
 
-  for (let i = 0; i < blocks.length; i += 1) {
-    const block = blocks[i];
-    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-    const singleLine = lines.join(' ');
-    const isHeading = lines.length === 1 && singleLine.length <= 90 && singleLine.endsWith(':');
-    const isExplicitList = lines.length > 1 && lines.every((line) => /^([-•*]|\d+\.)\s+/.test(line));
-    const isCallout = /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(singleLine);
+  const isHeadingLine = (line: string) => {
+    if (!line) return false;
+    if (line.endsWith(':') && line.length <= 90) return true;
+    if (headingPrefixes.some((prefix) => line.startsWith(prefix)) && line.length <= 90) return true;
+    return /^[A-Z][^.!?]{0,80}:$/.test(line);
+  };
+
+  const isListCandidate = (line: string) => {
+    if (!line) return false;
+    if (/^([-•*]|\d+\.)\s+/.test(line)) return true;
+    if (line.length <= 90) return true;
+    if (/^(Không|Có|Nên|Cần|Giữ|Lắp|Trang bị|Phù hợp|Dùng|Chữa|Kiểm tra|Tập huấn|Văn phòng|Cửa hàng|Nhà xưởng|Kho|Chung cư|Khách sạn|Nếu)\b/i.test(line)) return true;
+    return false;
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const isHeading = isHeadingLine(line);
+    const isCallout = /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(line);
 
     if (isHeading) {
       const listItems: string[] = [];
       let nextIndex = i + 1;
 
-      while (nextIndex < blocks.length) {
-        const nextBlock = blocks[nextIndex].trim();
-        const nextLines = nextBlock.split('\n').map((line) => line.trim()).filter(Boolean);
-        if (
-          nextLines.length !== 1 ||
-          nextBlock.endsWith(':') ||
-          nextBlock.length > 90 ||
-          /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(nextBlock) ||
-          !isShortLine(nextBlock)
-        ) {
+      while (nextIndex < lines.length) {
+        const nextLine = lines[nextIndex];
+        if (!nextLine || isHeadingLine(nextLine) || /^(👉|Gợi ý nhanh|Lưu ý|Nên chọn|Chỉ nên)/i.test(nextLine)) {
           break;
         }
-        listItems.push(nextBlock);
+        if (!isListCandidate(nextLine)) break;
+        listItems.push(nextLine.replace(/^([-•*]|\d+\.)\s+/, ''));
         nextIndex += 1;
       }
 
       nodes.push(
         <div key={`heading-${i}`} className="pccc-rich-block">
-          <p className="pccc-rich-heading">{singleLine}</p>
+          <p className="pccc-rich-heading">{line}</p>
           {listItems.length > 0 && (
             <ul className="pccc-rich-list">
               {listItems.map((item, index) => (
@@ -275,21 +283,28 @@ function renderFormattedMessage(content: string) {
       continue;
     }
 
-    if (isExplicitList) {
+    if (/^([-•*]|\d+\.)\s+/.test(line)) {
+      const listItems = [line.replace(/^([-•*]|\d+\.)\s+/, '')];
+      let nextIndex = i + 1;
+      while (nextIndex < lines.length && /^([-•*]|\d+\.)\s+/.test(lines[nextIndex])) {
+        listItems.push(lines[nextIndex].replace(/^([-•*]|\d+\.)\s+/, ''));
+        nextIndex += 1;
+      }
       nodes.push(
         <ul key={`list-${i}`} className="pccc-rich-list">
-          {lines.map((line, index) => (
-            <li key={`explicit-${i}-${index}`}>{line.replace(/^([-•*]|\d+\.)\s+/, '')}</li>
+          {listItems.map((item, index) => (
+            <li key={`explicit-${i}-${index}`}>{item}</li>
           ))}
         </ul>
       );
+      i = nextIndex - 1;
       continue;
     }
 
     if (isCallout) {
       nodes.push(
         <div key={`callout-${i}`} className="pccc-rich-callout">
-          {singleLine}
+          {line}
         </div>
       );
       continue;
@@ -297,7 +312,7 @@ function renderFormattedMessage(content: string) {
 
     nodes.push(
       <p key={`paragraph-${i}`} className="pccc-rich-paragraph">
-        {lines.join(' ')}
+        {line}
       </p>
     );
   }
@@ -837,7 +852,7 @@ export default function ChatPage() {
           cursor: not-allowed; opacity: 0.4;
         }
         .pccc-nav-disabled:hover { color: var(--text2); background: transparent; }
-        .pccc-nav-right { display: flex; align-items: center; gap: 10px; }
+        .pccc-nav-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 
         /* ── Status Badge ── */
         .pccc-status {
@@ -892,30 +907,24 @@ export default function ChatPage() {
           position: relative; z-index: 10; flex: 1;
           display: flex; flex-direction: column; overflow: hidden;
         }
-        .pccc-toolbar-wrap {
-          position: relative;
-          z-index: 20;
-          display: flex;
-          justify-content: center;
-          padding: 16px 24px 8px;
-        }
         .pccc-toolbar {
           display: inline-flex;
           align-items: center;
-          gap: 10px;
-          min-height: 50px;
-          padding: 0 18px 0 14px;
-          border-radius: 12px;
+          gap: 8px;
+          min-height: 36px;
+          padding: 0 14px 0 11px;
+          border-radius: 10px;
           border: 1px solid rgba(255,255,255,0.14);
           background: linear-gradient(180deg, rgba(34,18,11,0.92) 0%, rgba(16,8,5,0.94) 100%);
           box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 12px 30px rgba(0,0,0,0.34);
           color: #f5e7dc;
           font-family: inherit;
-          font-size: 14px;
+          font-size: 13px;
           font-weight: 700;
           letter-spacing: -0.2px;
           cursor: pointer;
           transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+          flex-shrink: 0;
         }
         .pccc-toolbar:hover:not(:disabled) {
           transform: translateY(-1px);
@@ -927,8 +936,8 @@ export default function ChatPage() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 22px;
-          height: 22px;
+          width: 18px;
+          height: 18px;
           color: rgba(255,244,237,0.86);
         }
         .pccc-toolbar-text { white-space: nowrap; }
@@ -1015,7 +1024,7 @@ export default function ChatPage() {
         .pccc-chip:active { transform: scale(0.96); }
 
         /* ── Input Shell ── */
-        .pccc-hero-input { width: 100%; max-width: 720px; animation: titleUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.6s both; }
+        .pccc-hero-input { width: 100%; max-width: 920px; animation: titleUp 0.8s cubic-bezier(0.16,1,0.3,1) 0.6s both; }
 
         .pccc-input-shell {
           background: var(--input-bg);
@@ -1118,12 +1127,12 @@ export default function ChatPage() {
 
         /* ── Chat Area ── */
         .pccc-chat {
-          flex: 1; overflow-y: auto; padding: 28px 24px 12px;
+          flex: 1; overflow-y: auto; padding: 28px 32px 12px;
           scrollbar-width: thin; scrollbar-color: var(--border2) transparent;
         }
         .pccc-chat::-webkit-scrollbar { width: 4px; }
         .pccc-chat::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
-        .pccc-msgs { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+        .pccc-msgs { width: 100%; max-width: 980px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
 
         /* ── Message ── */
         .pccc-msg {
@@ -1148,7 +1157,7 @@ export default function ChatPage() {
         @keyframes ringPulse { 0%,100%{opacity:0.5;transform:scale(1)} 50%{opacity:0;transform:scale(1.18)} }
 
         .pccc-bubble {
-          max-width: 74%; padding: 13px 16px 11px; border-radius: 16px;
+          max-width: min(82%, 860px); padding: 13px 16px 11px; border-radius: 16px;
           position: relative;
         }
         .pccc-bubble-ai {
@@ -1207,9 +1216,15 @@ export default function ChatPage() {
           gap: 6px;
           padding-left: 18px;
           margin: 0;
+          list-style: disc;
+          list-style-position: outside;
         }
         .pccc-rich-list li {
           line-height: 1.56;
+          display: list-item;
+        }
+        .pccc-rich-list li::marker {
+          color: rgba(249,115,22,0.9);
         }
         .pccc-rich-callout {
           padding: 10px 12px;
@@ -1240,19 +1255,17 @@ export default function ChatPage() {
         @keyframes spinAnim { to { transform: rotate(360deg); } }
 
         /* ── Bottom input bar ── */
-        .pccc-bottom { flex-shrink: 0; padding: 10px 24px 20px; }
-        .pccc-bottom-inner { max-width: 720px; margin: 0 auto; }
+        .pccc-bottom { flex-shrink: 0; padding: 10px 32px 20px; }
+        .pccc-bottom-inner { width: 100%; max-width: 980px; margin: 0 auto; }
 
         /* ── Responsive ── */
         @media (max-width: 640px) {
           .pccc-nav { padding: 0 20px; }
           .pccc-nav-links { display: none; }
-          .pccc-toolbar-wrap { justify-content: flex-start; padding: 12px 16px 6px; }
           .pccc-toolbar {
-            width: 100%;
-            justify-content: center;
-            min-height: 48px;
-            padding: 0 16px;
+            min-height: 34px;
+            padding: 0 12px 0 10px;
+            font-size: 12px;
           }
           .pccc-chat { padding: 16px 16px 8px; }
           .pccc-bottom { padding: 8px 16px 16px; }
@@ -1488,6 +1501,18 @@ export default function ChatPage() {
             </div>
           </div>
           <div className="pccc-nav-right">
+            {messages.length > 0 && (
+              <button className="pccc-toolbar" onClick={resetChat} disabled={loading} title="Cuộc trò chuyện mới">
+                <span className="pccc-toolbar-icon" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 2 3 8 9 8" />
+                    <path d="M3.05 13a9 9 0 1 0 2.42-7.12L3 8" />
+                  </svg>
+                </span>
+                <span className="pccc-toolbar-text">Cuộc trò chuyện mới</span>
+                <span className="pccc-toolbar-dot" aria-hidden="true" />
+              </button>
+            )}
             {connectionStatus === 'checking' && (
               <span className="pccc-status pccc-s-check">
                 <svg className="pccc-spin" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
@@ -1525,20 +1550,6 @@ export default function ChatPage() {
 
         {/* Content */}
         <div className="pccc-content">
-          {messages.length > 0 && (
-            <div className="pccc-toolbar-wrap">
-              <button className="pccc-toolbar" onClick={resetChat} disabled={loading} title="Cuộc trò chuyện mới">
-                <span className="pccc-toolbar-icon" aria-hidden="true">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 2 3 8 9 8" />
-                    <path d="M3.05 13a9 9 0 1 0 2.42-7.12L3 8" />
-                  </svg>
-                </span>
-                <span className="pccc-toolbar-text">Cuộc trò chuyện mới</span>
-                <span className="pccc-toolbar-dot" aria-hidden="true" />
-              </button>
-            </div>
-          )}
           {messages.length === 0 ? (
             /* ── HERO ── */
             <div className="pccc-hero">
